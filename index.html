@@ -4,13 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย 21.36</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/htm@3/dist/htm.js"></script>
+<script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Sarabun','Noto Sans Thai',system-ui,sans-serif;background:#F0FDFA;-webkit-text-size-adjust:100%}
@@ -38,7 +38,7 @@ textarea{resize:vertical}
 // ============================================================
 const CONFIG = {
   ADMIN_PIN: "1234",                  // เปลี่ยนรหัสแอดมิน
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxYLo0wNaVDWO3D1oEfpifW8uovABN-HvpKcTNUsvvyc_OsPbhiYLGNqPRjFEp5AwcGjw/exec",                // ใส่ URL ของ Google Apps Script
+  APPS_SCRIPT_URL: "",                // ใส่ URL ของ Google Apps Script
   CENTER_NAME: "ศูนย์สุขภาพชุมชนสะบ้าย้อย",
   MAX_PER_SLOT: 3,
   HOLIDAYS: new Set([
@@ -2000,10 +2000,10 @@ function AdminLogin({onLogin,onClose}){
       <form onsubmit=${submit}>
         <div style=${{position:"relative",marginBottom:14}}>
           <input type=${show?"text":"password"} value=${pin} autofocus
-            onInput=${e=>setPin(e.target.value)} placeholder="รหัสผ่าน"
+            onChange=${e=>setPin(e.target.value)} placeholder="รหัสผ่าน"
             style=${{fontSize:18,padding:"12px 44px 12px 14px",letterSpacing:4,
               borderColor:err?C.red:pin?C.teal:C.border,textAlign:"center"}}/>
-          <button type="button" onclick=${()=>setShow(s=>!s)}
+          <button type="button" onClick=${()=>setShow(s=>!s)}
             style=${{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
               background:"none",border:"none",cursor:"pointer",padding:4,display:"flex"}}>
             <${Ico} name=${show?"eyeOff":"eye"} size=${18} color=${C.textLt}/>
@@ -2014,7 +2014,7 @@ function AdminLogin({onLogin,onClose}){
           border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontWeight:700}}>
           เข้าสู่ระบบ
         </button>
-        <button type="button" onclick=${onClose} style=${{width:"100%",background:"none",border:"none",
+        <button type="button" onClick=${onClose} style=${{width:"100%",background:"none",border:"none",
           marginTop:8,fontSize:13,color:C.textLt,padding:"8px 0"}}>ยกเลิก</button>
       </form>
     </div>
@@ -2090,7 +2090,7 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
         <div>
           <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>เลขบัตรประชาชน 13 หลัก</label>
           <input value=${sid} maxlength="13" style=${{letterSpacing:.5}}
-            onInput=${e=>setSid(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="x-xxxx-xxxxx-xx-x"/>
+            onChange=${e=>setSid(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="x-xxxx-xxxxx-xx-x"/>
         </div>
         <div style=${{display:"flex",alignItems:"center",gap:8}}>
           <div style=${{flex:1,height:1,background:C.border}}/><span style=${{fontSize:12,color:C.textLt}}>หรือ</span>
@@ -2098,16 +2098,16 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
         </div>
         <div>
           <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>ชื่อ หรือ นามสกุล</label>
-          <input value=${snm} onInput=${e=>setSnm(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="กรอกชื่อหรือนามสกุล..."/>
+          <input value=${snm} onChange=${e=>setSnm(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="กรอกชื่อหรือนามสกุล..."/>
         </div>
-        <button onclick=${doSearch} style=${{background:C.teal,color:"white",border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontWeight:700}}>ค้นหา</button>
+        <button onClick=${doSearch} style=${{background:C.teal,color:"white",border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontWeight:700}}>ค้นหา</button>
       </div>
       ${res.length>0&&html`<div style=${{marginTop:16}}>
         <div style=${{fontSize:12,color:C.textMd,marginBottom:8}}>พบ ${res.length} ราย${res.length===20?" (แสดง 20 รายแรก)":""}</div>
         <div style=${{borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
           ${res.map((p,i)=>{
             const e=checkElig(p);
-            return html`<div key=${p.idcard+i} onclick=${()=>selPt(p)}
+            return html`<div key=${p.idcard+i} onClick=${()=>selPt(p)}
               style=${{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",
                 borderBottom:i<res.length-1?`1px solid ${C.border}`:"none",
                 cursor:"pointer",background:"white",transition:"background .15s"}}
@@ -2162,9 +2162,9 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
         </div>`)}
       </div>
       <div style=${{display:"flex",gap:8}}>
-        <button onclick=${reset} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
+        <button onClick=${reset} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
         ${el.ok
-          ?html`<button onclick=${()=>{setStep(3);setSelD(null);setSelT("");}} style=${{flex:2,background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>จองคิวตรวจ HPV</button>`
+          ?html`<button onClick=${()=>{setStep(3);setSelD(null);setSelT("");}} style=${{flex:2,background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>จองคิวตรวจ HPV</button>`
           :html`<button disabled style=${{flex:2,background:C.bg,color:C.textLt,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14}}>ไม่สามารถจองได้</button>`
         }
       </div>
@@ -2187,7 +2187,7 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
         <div style=${{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
           ${AVAIL_DATES.map(d=>{
             const dk=dateKey(d),isSel=selD&&d.getTime()===selD.getTime();
-            return html`<button key=${dk} onclick=${()=>{setSelD(d);setSelT("");}}
+            return html`<button key=${dk} onClick=${()=>{setSelD(d);setSelT("");}}
               style=${{background:isSel?C.teal:"white",color:isSel?"white":C.textDk,
                 border:`1.5px solid ${isSel?C.teal:C.border}`,borderRadius:12,padding:"8px 4px",
                 display:"flex",flexDirection:"column",alignItems:"center",gap:1,
@@ -2204,7 +2204,7 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
         <div style=${{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
           ${CONFIG.TIME_SLOTS.map(t=>{
             const full=sf(t),sel=selT===t,cnt=sc(t);
-            return html`<button key=${t} onclick=${()=>!full&&setSelT(t)} disabled=${full}
+            return html`<button key=${t} onClick=${()=>!full&&setSelT(t)} disabled=${full}
               style=${{background:full?C.bg:sel?C.teal:"white",color:full?C.textLt:sel?"white":C.textDk,
                 border:`1.5px solid ${full?C.border:sel?C.teal:C.borderMd}`,borderRadius:10,padding:"9px 0",
                 opacity:full?.45:1}}>
@@ -2218,11 +2218,11 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
       </div>`}
       <div style=${{marginBottom:14}}>
         <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>หมายเหตุ (ไม่บังคับ)</label>
-        <textarea value=${note} onInput=${e=>setNote(e.target.value)} rows="2" placeholder="ระบุความต้องการพิเศษ..."></textarea>
+        <textarea value=${note} onChange=${e=>setNote(e.target.value)} rows="2" placeholder="ระบุความต้องการพิเศษ..."></textarea>
       </div>
       <div style=${{display:"flex",gap:8}}>
-        <button onclick=${()=>setStep(2)} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
-        <button onclick=${confirmBook} disabled=${!selD||!selT}
+        <button onClick=${()=>setStep(2)} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
+        <button onClick=${confirmBook} disabled=${!selD||!selT}
           style=${{flex:2,background:selD&&selT?C.teal:C.bg,color:selD&&selT?"white":C.textLt,
             border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>
           ยืนยันการจอง
@@ -2259,7 +2259,7 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
         <${Ico} name="info" size=${16} color=${C.teal}/>
         <div style=${{fontSize:12,color:C.tealDk,lineHeight:1.6}}>นำบัตรประชาชนมาด้วย · หลีกเลี่ยงการสวนล้างช่องคลอดและมีเพศสัมพันธ์ก่อนตรวจ 48 ชั่วโมง</div>
       </div>
-      <button onclick=${reset} style=${{width:"100%",background:C.teal,color:"white",border:"none",borderRadius:14,padding:"13px 0",fontSize:15,fontWeight:700}}>จองคิวรายใหม่</button>
+      <button onClick=${reset} style=${{width:"100%",background:C.teal,color:"white",border:"none",borderRadius:14,padding:"13px 0",fontSize:15,fontWeight:700}}>จองคิวรายใหม่</button>
     </div>`}
   </div>`;
 }
@@ -2282,7 +2282,7 @@ function ListTab({bookings,removeBooking}){
             <div style=${{fontWeight:700,fontSize:14,color:C.textDk}}>${bk.p.title} ${bk.p.fname} ${bk.p.lname}</div>
             <div style=${{fontSize:11,color:C.textMd,marginTop:2}}>${CONFIG.MOO[bk.p.moo]||bk.p.moo} · ${bk.p.idcard}</div>
           </div>
-          <button onclick=${()=>removeBooking(bk.id)} style=${{background:C.redLt,color:C.red,border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>ยกเลิก</button>
+          <button onClick=${()=>removeBooking(bk.id)} style=${{background:C.redLt,color:C.red,border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>ยกเลิก</button>
         </div>
         <div style=${{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
           <span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.tealLt,color:C.teal,fontWeight:700}}>${bk.dateLabel} · ${bk.time} น.</span>
@@ -2375,7 +2375,7 @@ function LockedScreen({onUnlock}){
     </div>
     <div style=${{fontWeight:700,fontSize:16,color:C.textDk}}>สำหรับแอดมินเท่านั้น</div>
     <div style=${{fontSize:13,color:C.textMd,marginTop:6,marginBottom:20}}>กรุณาเข้าสู่ระบบเพื่อดูข้อมูลส่วนนี้</div>
-    <button onclick=${onUnlock} style=${{background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 28px",fontSize:14,fontWeight:700}}>เข้าสู่ระบบแอดมิน</button>
+    <button onClick=${onUnlock} style=${{background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 28px",fontSize:14,fontWeight:700}}>เข้าสู่ระบบแอดมิน</button>
   </div>`;
 }
 
@@ -2439,10 +2439,10 @@ function App(){
           <div style=${{color:"rgba(255,255,255,.75)",fontSize:11}}>${CONFIG.CENTER_NAME}</div>
         </div>
         ${isAdmin
-          ?html`<button onclick=${doLogout} style=${{background:"rgba(255,255,255,.15)",border:"none",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:"white",fontSize:12}}>
+          ?html`<button onClick=${doLogout} style=${{background:"rgba(255,255,255,.15)",border:"none",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:"white",fontSize:12}}>
             <${Ico} name="logout" size=${14} color="white"/> ออก
           </button>`
-          :html`<button onclick=${()=>setShowLogin(true)} style=${{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:"white",fontSize:12}}>
+          :html`<button onClick=${()=>setShowLogin(true)} style=${{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:"white",fontSize:12}}>
             <${Ico} name="lock" size=${14} color="white"/> แอดมิน
           </button>`
         }
@@ -2472,7 +2472,7 @@ function App(){
     <nav style=${{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"white",borderTop:`1px solid ${C.border}`,boxShadow:"0 -4px 20px rgba(0,0,0,.08)",display:"flex",height:64,zIndex:100}}>
       ${TABS.map(t=>{
         const active=tab===t.id,locked=t.admin&&!isAdmin;
-        return html`<button key=${t.id} onclick=${()=>{if(t.admin&&!isAdmin){setShowLogin(true);}else{setTab(t.id);}}}
+        return html`<button key=${t.id} onClick=${()=>{if(t.admin&&!isAdmin){setShowLogin(true);}else{setTab(t.id);}}}
           style=${{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"none",border:"none",cursor:"pointer",
             borderTop:`2.5px solid ${active?C.teal:"transparent"}`,transition:"border-color .2s",position:"relative"}}>
           <${Ico} name=${t.icon} size=${22} color=${active?C.teal:locked?"#CBD5E1":C.textLt}/>
