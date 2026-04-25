@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย 21.42</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -37,8 +37,8 @@ textarea{resize:vertical}
 // CONFIG — แก้ไขก่อนใช้งานจริง
 // ============================================================
 const CONFIG = {
-  ADMIN_PIN: "24646",                  // เปลี่ยนรหัสแอดมิน
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxYLo0wNaVDWO3D1oEfpifW8uovABN-HvpKcTNUsvvyc_OsPbhiYLGNqPRjFEp5AwcGjw/exec",                // ใส่ URL ของ Google Apps Script
+  ADMIN_PIN: "1234",                  // เปลี่ยนรหัสแอดมิน
+  APPS_SCRIPT_URL: "",                // ใส่ URL ของ Google Apps Script
   CENTER_NAME: "ศูนย์สุขภาพชุมชนสะบ้าย้อย",
   MAX_PER_SLOT: 3,
   HOLIDAYS: new Set([
@@ -1997,9 +1997,9 @@ function AdminLogin({onLogin,onClose}){
         <div style=${{fontWeight:700,fontSize:18,color:C.textDk}}>เข้าสู่ระบบแอดมิน</div>
         <div style=${{fontSize:13,color:C.textMd,marginTop:4}}>สำหรับเจ้าหน้าที่เท่านั้น</div>
       </div>
-      <form onsubmit=${submit}>
+      <form onSubmit=${submit}>
         <div style=${{position:"relative",marginBottom:14}}>
-          <input type=${show?"text":"password"} value=${pin} autofocus
+          <input type=${show?"text":"password"} value=${pin} autoFocus
             onChange=${e=>setPin(e.target.value)} placeholder="รหัสผ่าน"
             style=${{fontSize:18,padding:"12px 44px 12px 14px",letterSpacing:4,
               borderColor:err?C.red:pin?C.teal:C.border,textAlign:"center"}}/>
@@ -2089,7 +2089,7 @@ function BookingTab({bookings,slotCount,slotFull,addBooking,markSynced}){
       <div style=${{display:"flex",flexDirection:"column",gap:10}}>
         <div>
           <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>เลขบัตรประชาชน 13 หลัก</label>
-          <input value=${sid} maxlength="13" style=${{letterSpacing:.5}}
+          <input value=${sid} maxLength="13" style=${{letterSpacing:.5}}
             onChange=${e=>setSid(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="x-xxxx-xxxxx-xx-x"/>
         </div>
         <div style=${{display:"flex",alignItems:"center",gap:8}}>
@@ -2435,7 +2435,7 @@ function App(){
           <${Ico} name="shield" size=${20} color="white"/>
         </div>
         <div style=${{flex:1}}>
-          <div style=${{color:"white",fontWeight:700,fontSize:15}}>HPV Self-test จองคิว</div>
+          <div style=${{color:"white",fontWeight:700,fontSize:15}}>HPV Self-test จองคิว 9.55</div>
           <div style=${{color:"rgba(255,255,255,.75)",fontSize:11}}>${CONFIG.CENTER_NAME}</div>
         </div>
         ${isAdmin
