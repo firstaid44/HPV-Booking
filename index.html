@@ -13,13 +13,11 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Sarabun',system-ui,sans-serif;background:#F0FDFA}
 #root{max-width:480px;margin:0 auto;min-height:100vh}
-input,textarea,button,select{font-family:inherit}
+input,textarea,button{font-family:inherit}
 input,textarea{background:#fff;color:#0F172A;border:1.5px solid #E2E8F0;border-radius:10px;padding:10px 12px;font-size:15px;outline:none;transition:border-color .2s;width:100%;box-sizing:border-box}
 input:focus,textarea:focus{border-color:#0D9488}
 textarea{resize:vertical}
 button{cursor:pointer}
-::-webkit-scrollbar{width:4px}
-::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:2px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes popIn{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
@@ -31,48 +29,72 @@ button{cursor:pointer}
 <div id="root"></div>
 <script>
 /* ============================================================
-   CONFIG — ใส่ URL ของ Google Apps Script ก่อน deploy
+   CONFIG — ไม่ต้องแก้ที่นี่ ตั้งค่าในแอปได้เลย (แท็บแอดมิน → ตั้งค่า)
    ============================================================ */
-const APPS_SCRIPT_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AWDtjMWB-QcaZHC8D30UVHWOV0sNN_HWkm3ZSHh1NDvpkuYaRxojiVppVpPFEkhBIogeIgXPm7Hd7fbi3IZ18G1Zns8UBVlOqTkCtjLyMnJYw3e5b_DgWe8jezHwlllbsqKaN63Ap8lvrNdjCdxBYXdcVqTX5QmzXZ6afCPSUp_zPtkfIMV5itSKswIm5SdPV6H27lzyXbpEdZjW9tGicrzJVOky84C2qkdXoC09oVmU3GfurE7QYK2tfLfnlUc6JUhw6QRfU_uO1ufhHoz4sglrmbMJs99NvQ&lib=M0dRdl09fJPLPnIa34Ga_7eXXXZNzgGcX";   // << วาง URL Apps Script ที่นี่
-const ADMIN_PIN       = "1234"; // << เปลี่ยนรหัสแอดมิน
-const CENTER_NAME     = "ศูนย์สุขภาพชุมชนสะบ้าย้อย";
-const MAX_SLOT        = 3;
-const SYNC_INTERVAL   = 60000; // sync ทุก 60 วินาที
-const TIME_SLOTS      = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
-                         "13:00","13:30","14:00","14:30","15:00","15:30"];
-const MOO_NAME        = {"01":"หมู่ 1 บ้านสะบ้าย้อย","02":"หมู่ 2","03":"หมู่ 3",
-                         "04":"หมู่ 4","05":"หมู่ 5","06":"หมู่ 6",
-                         "07":"หมู่ 7","08":"หมู่ 8","09":"หมู่ 9"};
-const HOLIDAYS        = new Set(["2026-01-01","2026-04-06","2026-04-13","2026-04-14","2026-04-15",
-                         "2026-05-01","2026-05-04","2026-05-22","2026-06-03",
-                         "2026-07-28","2026-07-29","2026-08-12",
-                         "2026-10-23","2026-12-05","2026-12-10","2026-12-31"]);
+const ADMIN_PIN   = "1234";
+const CENTER_NAME = "ศูนย์สุขภาพชุมชนสะบ้าย้อย";
+const MAX_SLOT    = 3;
+const SYNC_MS     = 60000;
+const TIME_SLOTS  = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
+                     "13:00","13:30","14:00","14:30","15:00","15:30"];
+const MOO_NAME    = {"01":"หมู่ 1 บ้านสะบ้าย้อย","02":"หมู่ 2","03":"หมู่ 3",
+                     "04":"หมู่ 4","05":"หมู่ 5","06":"หมู่ 6",
+                     "07":"หมู่ 7","08":"หมู่ 8","09":"หมู่ 9"};
+const HOLIDAYS    = new Set(["2026-01-01","2026-04-06","2026-04-13","2026-04-14","2026-04-15",
+                     "2026-05-01","2026-05-04","2026-05-22","2026-06-03",
+                     "2026-07-28","2026-07-29","2026-08-12",
+                     "2026-10-23","2026-12-05","2026-12-10","2026-12-31"]);
 
-const STORAGE_PATIENTS = "hpv_patients_cache";
-const STORAGE_BOOKINGS = "hpv_bookings_v4";
-const ADMIN_KEY        = "hpv_admin";
-const SESSION_H        = 8;
+const KEY_URL  = "hpv_api_url";
+const KEY_BK   = "hpv_bookings_v4";
+const KEY_PT   = "hpv_patients_cache";
+const KEY_ADM  = "hpv_admin";
+const SESSION_H = 8;
 
 /* ============================================================
-   API CALLS
+   JSONP GET (ข้ามปัญหา CORS ได้เลย)
    ============================================================ */
-async function apiGet(action) {
-  if (!APPS_SCRIPT_URL) throw new Error("ยังไม่ได้ตั้งค่า APPS_SCRIPT_URL");
-  const res = await fetch(`${APPS_SCRIPT_URL}?action=${action}`, {redirect:"follow"});
-  const data = await res.json();
-  if (data.status === "error") throw new Error(data.message);
-  return data;
+function jsonpGet(baseUrl, params={}) {
+  return new Promise((resolve, reject) => {
+    const cbName = "_cb" + Date.now() + Math.random().toString(36).slice(2,6);
+    const timeout = setTimeout(()=>{
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error("หมดเวลา — ตรวจสอบ Apps Script URL และ deployment"));
+    }, 15000);
+
+    window[cbName] = (data) => {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      if(data && data.status==="error") reject(new Error(data.message));
+      else resolve(data);
+    };
+
+    const qs = Object.entries({...params, callback:cbName}).map(([k,v])=>k+"="+encodeURIComponent(v)).join("&");
+    const script = document.createElement("script");
+    script.src = baseUrl + "?" + qs;
+    script.onerror = ()=>{
+      clearTimeout(timeout);
+      delete window[cbName];
+      reject(new Error("โหลดสคริปต์ล้มเหลว — URL อาจผิด หรือ Apps Script ยังไม่ deploy"));
+    };
+    document.head.appendChild(script);
+  });
 }
 
-async function apiPost(payload) {
-  if (!APPS_SCRIPT_URL) throw new Error("ยังไม่ได้ตั้งค่า APPS_SCRIPT_URL");
-  const res = await fetch(APPS_SCRIPT_URL, {
+/* ============================================================
+   POST (ใช้ text/plain เพื่อข้าม CORS preflight)
+   ============================================================ */
+async function apiPost(url, payload) {
+  const res = await fetch(url, {
     method:"POST", redirect:"follow",
     headers:{"Content-Type":"text/plain"},
     body: JSON.stringify(payload)
   });
+  if (!res.ok) throw new Error("HTTP " + res.status);
   const data = await res.json();
-  if (data.status === "error") throw new Error(data.message);
+  if (data.status==="error") throw new Error(data.message);
   return data;
 }
 
@@ -85,59 +107,38 @@ const {useState,useEffect,useMemo,useCallback,useRef} = React;
 const THM_S = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 const THM_F = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
 const DAY_TH = ["อาทิตย์","จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์"];
-const NOW = new Date(2026,3,24);
+const NOW    = new Date(2026,3,24);
 
-function parseBE(s) {
-  if (!s) return null;
-  const p = s.trim().split("/"); if (p.length !== 3) return null;
-  let d=+p[0],m=+p[1],y=+p[2];
-  if (isNaN(d)||isNaN(m)||isNaN(y)) return null;
-  if (y < 100) y += 2500;
-  return new Date(y-543,m-1,d);
-}
-const fmtBE     = d => d ? `${d.getDate()} ${THM_S[d.getMonth()]} ${d.getFullYear()+543}` : "";
-const fmtBEFull = d => d ? `${d.getDate()} ${THM_F[d.getMonth()]} ${d.getFullYear()+543}` : "";
-const dKey      = d => d.toISOString().split("T")[0];
-const fmtId     = id => id.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/,"$1-$2-$3-$4-$5");
+function parseBE(s){if(!s)return null;const p=s.trim().split("/");if(p.length!==3)return null;let d=+p[0],m=+p[1],y=+p[2];if(isNaN(d)||isNaN(m)||isNaN(y))return null;if(y<100)y+=2500;return new Date(y-543,m-1,d);}
+const fmtBE     = d=>d?`${d.getDate()} ${THM_S[d.getMonth()]} ${d.getFullYear()+543}`:"";
+const fmtBEFull = d=>d?`${d.getDate()} ${THM_F[d.getMonth()]} ${d.getFullYear()+543}`:"";
+const dKey      = d=>d.toISOString().split("T")[0];
+const fmtId     = id=>id.replace(/(\d)(\d{4})(\d{5})(\d{2})(\d)/,"$1-$2-$3-$4-$5");
 
-function isBookable(d) {
-  return (d.getDay()===1||d.getDay()===5) && !HOLIDAYS.has(dKey(d));
-}
-function nextDates(n=16) {
-  const res=[],cur=new Date(NOW);cur.setDate(cur.getDate()+1);
-  while(res.length<n){if(isBookable(cur))res.push(new Date(cur));cur.setDate(cur.getDate()+1);}
-  return res;
-}
-function checkElig(p) {
-  const age = parseInt(p.age)||0;
-  if(age<30||age>60) return{ok:false,col:"red",icon:"✕",reason:`อายุ ${age} ปี ไม่อยู่ในเกณฑ์ (30–60 ปี)`};
-  const sd = p["วันคัดกรอง"]||p.screendate||"";
-  if(!sd.trim()) return{ok:true,col:"green",icon:"✓",reason:"ยังไม่เคยรับการตรวจ HPV Self-test"};
-  const last = parseBE(sd);
-  if(!last) return{ok:true,col:"green",icon:"✓",reason:"ไม่มีข้อมูลการตรวจเดิม"};
-  const yrs = (NOW-last)/(365.25*24*3600*1000);
-  if(yrs>=5) return{ok:true,col:"green",icon:"✓",reason:`ครบ 5 ปีแล้ว (ตรวจล่าสุด ${fmtBE(last)})`};
+function isBookable(d){return(d.getDay()===1||d.getDay()===5)&&!HOLIDAYS.has(dKey(d));}
+function nextDates(n=16){const res=[],cur=new Date(NOW);cur.setDate(cur.getDate()+1);while(res.length<n){if(isBookable(cur))res.push(new Date(cur));cur.setDate(cur.getDate()+1);}return res;}
+function checkElig(p){
+  const age=parseInt(p.age)||0;
+  if(age<30||age>60)return{ok:false,col:"red",icon:"✕",reason:`อายุ ${age} ปี ไม่อยู่ในเกณฑ์ (30–60 ปี)`};
+  const sd=(p["วันคัดกรอง"]||p.screendate||"").trim();
+  if(!sd)return{ok:true,col:"green",icon:"✓",reason:"ยังไม่เคยรับการตรวจ HPV Self-test"};
+  const last=parseBE(sd);
+  if(!last)return{ok:true,col:"green",icon:"✓",reason:"ไม่มีข้อมูลการตรวจเดิม"};
+  const yrs=(NOW-last)/(365.25*24*3600*1000);
+  if(yrs>=5)return{ok:true,col:"green",icon:"✓",reason:`ครบ 5 ปีแล้ว (ตรวจล่าสุด ${fmtBE(last)})`};
   const next=new Date(last);next.setFullYear(next.getFullYear()+5);
   return{ok:false,col:"amber",icon:"⏱",reason:`ยังไม่ครบ 5 ปี · ตรวจล่าสุด ${fmtBE(last)} · ครั้งถัดไป ${fmtBE(next)}`};
 }
 
-const C = {
-  teal:"#0D9488",tealDk:"#0F766E",tealLt:"#CCFBF1",tealMd:"#5EEAD4",
-  amber:"#D97706",amberLt:"#FEF3C7",
-  red:"#DC2626",redLt:"#FEE2E2",
-  green:"#16A34A",greenLt:"#DCFCE7",
-  bg:"#F0FDFA",surface:"#fff",
-  textDk:"#0F172A",textMd:"#475569",textLt:"#94A3B8",
-  border:"#E2E8F0",borderMd:"#CBD5E1",
-};
-const card = {background:C.surface,borderRadius:16,padding:"14px 16px",boxShadow:"0 1px 3px rgba(0,0,0,.07)",marginBottom:12};
-const ec  = e => e.ok?C.teal:e.col==="amber"?C.amber:C.red;
-const eb  = e => e.ok?C.tealLt:e.col==="amber"?C.amberLt:C.redLt;
-const AVAIL = nextDates(16);
+const C={teal:"#0D9488",tealDk:"#0F766E",tealLt:"#CCFBF1",tealMd:"#5EEAD4",
+  amber:"#D97706",amberLt:"#FEF3C7",red:"#DC2626",redLt:"#FEE2E2",
+  green:"#16A34A",greenLt:"#DCFCE7",bg:"#F0FDFA",surface:"#fff",
+  textDk:"#0F172A",textMd:"#475569",textLt:"#94A3B8",border:"#E2E8F0",borderMd:"#CBD5E1"};
+const card={background:C.surface,borderRadius:16,padding:"14px 16px",boxShadow:"0 1px 3px rgba(0,0,0,.07)",marginBottom:12};
+const ec=e=>e.ok?C.teal:e.col==="amber"?C.amber:C.red;
+const eb=e=>e.ok?C.tealLt:e.col==="amber"?C.amberLt:C.redLt;
+const AVAIL=nextDates(16);
 
-/* ============================================================
-   ICONS
-   ============================================================ */
 const ICONS={
   calendar:"M8 2v3M16 2v3M3 8.5h18M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
   list:"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
@@ -149,11 +150,10 @@ const ICONS={
   eye:"M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
   eyeOff:"M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22",
   refresh:"M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15",
-  plus:"M12 5v14M5 12h14",
-  edit:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z",
-  trash:"M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6",
-  users:"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+  settings:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z",
   check:"M20 6 9 17l-5-5",
+  x:"M18 6 6 18M6 6l12 12",
+  link:"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
 };
 function Ico({name,size=20,color="currentColor",sw=1.8}){
   return html`<svg width=${size} height=${size} viewBox="0 0 24 24" fill="none"
@@ -163,36 +163,91 @@ function Ico({name,size=20,color="currentColor",sw=1.8}){
 }
 
 /* ============================================================
-   LOADING SCREEN
+   SETTINGS SCREEN (ตั้งค่า URL จาก UI)
    ============================================================ */
-function LoadingScreen({msg="กำลังโหลดข้อมูล..."}){
-  return html`<div style=${{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:16}}>
-    <div style=${{width:48,height:48,border:`4px solid ${C.tealLt}`,borderTopColor:C.teal,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-    <div style=${{fontSize:14,color:C.textMd}}>${msg}</div>
-  </div>`;
-}
+function SettingsScreen({onSave}){
+  const [url,setUrl]=useState(localStorage.getItem(KEY_URL)||"");
+  const [status,setStatus]=useState(null); // null | "testing" | "ok" | "err"
+  const [errMsg,setErrMsg]=useState("");
 
-/* ============================================================
-   NO CONFIG SCREEN
-   ============================================================ */
-function NoConfigScreen(){
-  return html`<div style=${{padding:"40px 20px",textAlign:"center"}}>
-    <div style=${{width:64,height:64,borderRadius:20,background:C.amberLt,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
-      <span style=${{fontSize:28}}>⚙️</span>
+  async function testConn(){
+    const u=url.trim();
+    if(!u){setStatus("err");setErrMsg("กรุณากรอก URL ก่อน");return;}
+    setStatus("testing");setErrMsg("");
+    try{
+      const r = await jsonpGet(u,{action:"ping"});
+      setStatus("ok");
+    }catch(e){
+      setStatus("err");setErrMsg(e.message);
+    }
+  }
+
+  function save(){
+    const u=url.trim();
+    if(!u)return;
+    localStorage.setItem(KEY_URL,u);
+    onSave(u);
+  }
+
+  return html`<div style=${{padding:"0 0 80px"}}>
+    <div style=${card}>
+      <div style=${{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+        <div style=${{width:40,height:40,borderRadius:12,background:C.tealLt,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <${Ico} name="link" size=${20} color=${C.teal}/>
+        </div>
+        <div>
+          <div style=${{fontWeight:700,fontSize:15,color:C.textDk}}>ตั้งค่า Apps Script URL</div>
+          <div style=${{fontSize:12,color:C.textMd}}>เชื่อมต่อกับ Google Sheets</div>
+        </div>
+      </div>
+
+      <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:6}}>
+        Web App URL (จาก Google Apps Script)
+      </label>
+      <textarea value=${url} onChange=${e=>setUrl(e.target.value)} rows="3"
+        placeholder="https://script.google.com/macros/s/.../exec"
+        style=${{fontSize:12,fontFamily:"monospace",letterSpacing:-.3}}/>
+
+      <div style=${{display:"flex",gap:8,marginTop:10}}>
+        <button onClick=${testConn} disabled=${status==="testing"}
+          style=${{flex:1,background:C.tealLt,color:C.teal,border:"none",borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:700}}>
+          ${status==="testing"?html`<span style=${{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><div style=${{width:14,height:14,border:`2px solid ${C.teal}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 1s linear infinite"}}/> ทดสอบ...</span>`:"🔗 ทดสอบการเชื่อมต่อ"}
+        </button>
+        <button onClick=${save} disabled=${!url.trim()||status==="testing"}
+          style=${{flex:1,background:url.trim()?C.teal:"#E2E8F0",color:url.trim()?"white":C.textLt,border:"none",borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:700}}>
+          บันทึก
+        </button>
+      </div>
+
+      ${status==="ok"&&html`<div style=${{marginTop:10,background:C.greenLt,borderRadius:10,padding:"10px 12px",display:"flex",gap:8,alignItems:"center"}}>
+        <${Ico} name="check" size=${16} color=${C.green}/>
+        <span style=${{fontSize:13,color:C.green,fontWeight:700}}>เชื่อมต่อสำเร็จ! กด "บันทึก" เพื่อใช้งาน</span>
+      </div>`}
+      ${status==="err"&&html`<div style=${{marginTop:10,background:C.redLt,borderRadius:10,padding:"10px 12px"}}>
+        <div style=${{fontSize:13,color:C.red,fontWeight:700,marginBottom:4}}>⚠ เชื่อมต่อไม่สำเร็จ</div>
+        <div style=${{fontSize:12,color:C.textMd,marginBottom:8}}>${errMsg}</div>
+        <div style=${{fontSize:12,color:C.textMd,lineHeight:1.8}}>
+          <strong>วิธีแก้:</strong><br/>
+          1. ตรวจสอบว่า URL ลงท้ายด้วย <code style=${{background:C.bg,padding:"0 4px",borderRadius:4}}>/exec</code><br/>
+          2. Deploy ใหม่ → <strong>Who has access: Anyone</strong><br/>
+          3. ใช้ URL จาก "Deploy" ล่าสุด ไม่ใช่ /dev<br/>
+          4. วางโค้ดจากไฟล์ <strong>Code.gs</strong> ล่าสุด
+        </div>
+      </div>`}
     </div>
-    <div style=${{fontWeight:700,fontSize:16,color:C.textDk}}>ยังไม่ได้ตั้งค่า Apps Script URL</div>
-    <div style=${{fontSize:13,color:C.textMd,marginTop:8,lineHeight:1.8}}>
-      กรุณาเปิดไฟล์ index.html แล้วแก้ไขบรรทัด<br/>
-      <code style=${{background:C.bg,padding:"2px 8px",borderRadius:6,fontSize:12}}>const APPS_SCRIPT_URL = ""</code><br/>
-      ให้ใส่ URL ของ Google Apps Script ที่ deploy แล้ว
-    </div>
-    <div style=${{marginTop:16,background:C.bg,borderRadius:12,padding:"12px 14px",textAlign:"left",fontSize:12,color:C.textMd,lineHeight:1.8}}>
-      <strong>วิธีสร้าง Apps Script:</strong><br/>
-      1. เปิด Google Sheets → Extensions → Apps Script<br/>
-      2. วางโค้ดจากไฟล์ Code.gs<br/>
-      3. Deploy → New deployment → Web app<br/>
-      4. Who has access: <strong>Anyone</strong><br/>
-      5. Copy URL มาใส่ใน index.html
+
+    <div style=${{...card,background:"#F8FAFC"}}>
+      <div style=${{fontWeight:700,fontSize:13,color:C.textDk,marginBottom:10}}>📋 วิธีสร้าง Apps Script</div>
+      ${["เปิด Google Sheets → คลิกเมนู Extensions → Apps Script",
+         "ลบโค้ดเดิมออกทั้งหมด แล้ววางโค้ดจากไฟล์ Code.gs",
+         "กด 💾 Save (Ctrl+S)",
+         "คลิก Deploy → New deployment → เลือก Type: Web app",
+         "ตั้ง Who has access: Anyone → คลิก Deploy",
+         "คัดลอก URL ที่ได้ มาวางด้านบน",
+      ].map((s,i)=>html`<div key=${i} style=${{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}>
+        <div style=${{width:22,height:22,borderRadius:"50%",background:C.teal,color:"white",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>${i+1}</div>
+        <div style=${{fontSize:12,color:C.textMd,lineHeight:1.6}}>${s}</div>
+      </div>`)}
     </div>
   </div>`;
 }
@@ -201,41 +256,26 @@ function NoConfigScreen(){
    ADMIN LOGIN MODAL
    ============================================================ */
 function AdminLogin({onLogin,onClose}){
-  const [pin,setPin]=useState("");
-  const [show,setShow]=useState(false);
-  const [err,setErr]=useState(false);
-  const [shake,setShake]=useState(false);
-  function submit(e){
-    e.preventDefault();
-    if(onLogin(pin)) return;
-    setErr(true);setShake(true);setPin("");
-    setTimeout(()=>{setErr(false);setShake(false);},1500);
-  }
-  return html`
-  <div style=${{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+  const [pin,setPin]=useState(""); const [show,setShow]=useState(false);
+  const [err,setErr]=useState(false); const [shake,setShake]=useState(false);
+  function submit(e){e.preventDefault();if(onLogin(pin))return;setErr(true);setShake(true);setPin("");setTimeout(()=>{setErr(false);setShake(false);},1500);}
+  return html`<div style=${{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
     <div style=${{background:C.surface,borderRadius:20,padding:"28px 24px",width:"100%",maxWidth:340,animation:shake?"shake .4s ease":"popIn .25s ease"}}>
       <div style=${{textAlign:"center",marginBottom:20}}>
-        <div style=${{width:56,height:56,borderRadius:16,background:C.tealLt,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <${Ico} name="lock" size=${24} color=${C.teal}/>
-        </div>
+        <div style=${{width:56,height:56,borderRadius:16,background:C.tealLt,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center"}}><${Ico} name="lock" size=${24} color=${C.teal}/></div>
         <div style=${{fontWeight:700,fontSize:18,color:C.textDk}}>เข้าสู่ระบบแอดมิน</div>
         <div style=${{fontSize:13,color:C.textMd,marginTop:4}}>สำหรับเจ้าหน้าที่เท่านั้น</div>
       </div>
       <form onSubmit=${submit}>
         <div style=${{position:"relative",marginBottom:14}}>
-          <input type=${show?"text":"password"} value=${pin} autoFocus
-            onChange=${e=>setPin(e.target.value)} placeholder="รหัสผ่าน"
-            style=${{fontSize:18,padding:"12px 44px 12px 14px",letterSpacing:4,
-              borderColor:err?C.red:pin?C.teal:C.border,textAlign:"center"}}/>
-          <button type="button" onClick=${()=>setShow(s=>!s)}
-            style=${{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",display:"flex"}}>
+          <input type=${show?"text":"password"} value=${pin} autoFocus onChange=${e=>setPin(e.target.value)} placeholder="รหัสผ่าน"
+            style=${{fontSize:18,padding:"12px 44px 12px 14px",letterSpacing:4,borderColor:err?C.red:pin?C.teal:C.border,textAlign:"center"}}/>
+          <button type="button" onClick=${()=>setShow(s=>!s)} style=${{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",display:"flex"}}>
             <${Ico} name=${show?"eyeOff":"eye"} size=${18} color=${C.textLt}/>
           </button>
         </div>
         ${err&&html`<div style=${{color:C.red,fontSize:12,textAlign:"center",marginBottom:10,fontWeight:700}}>รหัสผ่านไม่ถูกต้อง</div>`}
-        <button type="submit" style=${{width:"100%",background:pin?C.teal:"#F1F5F9",color:pin?"white":C.textLt,border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontWeight:700}}>
-          เข้าสู่ระบบ
-        </button>
+        <button type="submit" style=${{width:"100%",background:pin?C.teal:"#F1F5F9",color:pin?"white":C.textLt,border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontWeight:700}}>เข้าสู่ระบบ</button>
         <button type="button" onClick=${onClose} style=${{width:"100%",background:"none",border:"none",marginTop:8,fontSize:13,color:C.textLt,padding:"8px 0"}}>ยกเลิก</button>
       </form>
     </div>
@@ -245,106 +285,77 @@ function AdminLogin({onLogin,onClose}){
 /* ============================================================
    BOOKING TAB
    ============================================================ */
-function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
-  const [step,setStep]=useState(1);
-  const [sid,setSid]=useState(""); const [snm,setSnm]=useState("");
-  const [res,setRes]=useState([]); const [pt,setPt]=useState(null);
-  const [el,setEl]=useState(null); const [selD,setSelD]=useState(null);
-  const [selT,setSelT]=useState(""); const [note,setNote]=useState("");
+function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
+  const [step,setStep]=useState(1); const [sid,setSid]=useState(""); const [snm,setSnm]=useState("");
+  const [res,setRes]=useState([]); const [pt,setPt]=useState(null); const [el,setEl]=useState(null);
+  const [selD,setSelD]=useState(null); const [selT,setSelT]=useState(""); const [note,setNote]=useState("");
   const [conf,setConf]=useState(null); const [syncSt,setSyncSt]=useState(null);
 
   function doSearch(){
-    if(!sid.trim()&&!snm.trim()) return;
+    if(!sid.trim()&&!snm.trim())return;
     let r=patients;
     if(sid.trim()) r=r.filter(p=>String(p.idcard||"").includes(sid.trim()));
     if(snm.trim()){const q=snm.trim().toLowerCase();r=r.filter(p=>(p.fname||"").toLowerCase().includes(q)||(p.lname||"").toLowerCase().includes(q));}
     setRes(r.slice(0,20));
   }
   function selPt(p){setPt(p);setEl(checkElig(p));setStep(2);setRes([]);window.scrollTo(0,0);}
-
   async function confirmBook(){
-    if(!selD||!selT) return;
-    const dk=dKey(selD);
-    const bk={
-      id: Date.now(),
-      action:"addBooking",
-      name:`${pt.titlename||pt.title||""} ${pt.fname} ${pt.lname}`,
-      idcard:pt.idcard, village:MOO_NAME[pt.moo]||pt.moo,
-      hno:pt.hno, age:pt.age,
-      date:fmtBEFull(selD), time:selT, note,
-      // เก็บข้อมูลสำหรับ UI
-      _dk:dk, _dateLabel:fmtBEFull(selD), _dayTh:DAY_TH[selD.getDay()],
-      _pt:pt, synced:false
-    };
-    onAddBooking(bk);
-    setConf(bk);setStep(4);setSyncSt("ing");window.scrollTo(0,0);
-    try{
-      await apiPost(bk);
-      setSyncSt("ok");
-      onAddBooking({...bk,synced:true},true);
-    } catch(e){ setSyncSt("err"); }
+    if(!selD||!selT)return;
+    const bk={id:Date.now(),action:"addBooking",
+      name:`${pt.titlename||""} ${pt.fname} ${pt.lname}`.trim(),
+      idcard:pt.idcard,village:MOO_NAME[String(pt.moo||"").padStart(2,"0")]||pt.moo,
+      hno:pt.hno,age:pt.age,date:fmtBEFull(selD),time:selT,note,
+      _dk:dKey(selD),_dateLabel:fmtBEFull(selD),_dayTh:DAY_TH[selD.getDay()],synced:false};
+    onAddBooking(bk);setConf(bk);setStep(4);setSyncSt("ing");window.scrollTo(0,0);
+    try{await apiPost(apiUrl,bk);setSyncSt("ok");onAddBooking({...bk,synced:true},true);}
+    catch(e){setSyncSt("err");}
   }
   function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);}
-
   const sc=t=>slotCount(selD?dKey(selD):"",t);
   const sf=t=>slotFull(selD?dKey(selD):"",t,MAX_SLOT);
-
-  // Step bar
   const StepBar=()=>html`<div style=${{display:"flex",alignItems:"center",marginBottom:16}}>
-    ${["ค้นหา","เช็คสิทธิ์","เลือกวัน","ยืนยัน"].map((lbl,i)=>{
-      const n=i+1,active=step===n,done=step>n;
+    ${["ค้นหา","เช็คสิทธิ์","เลือกวัน","ยืนยัน"].map((lbl,i)=>{const n=i+1,active=step===n,done=step>n;
       return html`<div key=${n} style=${{display:"flex",alignItems:"center",flex:i<3?1:"none"}}>
         <div style=${{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-          <div style=${{width:28,height:28,borderRadius:"50%",
-            background:done||active?C.teal:"white",border:`2px solid ${done||active?C.teal:C.border}`,
-            color:done||active?"white":C.textLt,display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:11,fontWeight:700,boxShadow:active?`0 0 0 3px ${C.tealLt}`:"none"}}>
-            ${done?"✓":n}
-          </div>
+          <div style=${{width:28,height:28,borderRadius:"50%",background:done||active?C.teal:"white",border:`2px solid ${done||active?C.teal:C.border}`,color:done||active?"white":C.textLt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,boxShadow:active?`0 0 0 3px ${C.tealLt}`:"none"}}>${done?"✓":n}</div>
           <span style=${{fontSize:10,color:active?C.teal:C.textLt,fontWeight:active?700:400}}>${lbl}</span>
         </div>
         ${i<3&&html`<div style=${{flex:1,height:2,background:done?C.teal:C.border,margin:"0 4px",marginBottom:16,borderRadius:1}}/>`}
       </div>`;
     })}
   </div>`;
-
   return html`<div class="fade">
     <${StepBar}/>
-
+    ${!apiUrl&&html`<div style=${{...card,background:C.amberLt,border:`1px solid ${C.amber}33`}}>
+      <div style=${{display:"flex",gap:10,alignItems:"flex-start"}}>
+        <${Ico} name="info" size=${18} color=${C.amber}/>
+        <div style=${{fontSize:13,color:C.amber}}>ยังไม่ได้เชื่อมต่อ Google Sheets · ไปที่ <strong>แอดมิน → ตั้งค่า</strong> เพื่อเชื่อมต่อ</div>
+      </div>
+    </div>`}
     ${step===1&&html`<div style=${card}>
       <div style=${{fontWeight:700,fontSize:16,color:C.textDk,marginBottom:14}}>ค้นหาผู้รับบริการ</div>
-      ${patients.length===0&&html`<div style=${{textAlign:"center",padding:"20px 0",color:C.textLt,fontSize:13}}>⚠️ ยังไม่มีข้อมูลผู้ป่วย กรุณาตั้งค่า Apps Script URL</div>`}
+      ${patients.length===0&&html`<div style=${{textAlign:"center",padding:"10px 0 14px",color:C.textLt,fontSize:12}}>⏳ ยังไม่มีข้อมูล ${apiUrl?"กำลังโหลด...":"กรุณาเชื่อมต่อ Sheets ก่อน"}</div>`}
       <div style=${{display:"flex",flexDirection:"column",gap:10}}>
-        <div>
-          <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>เลขบัตรประชาชน 13 หลัก</label>
-          <input value=${sid} maxLength="13" onChange=${e=>setSid(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="x-xxxx-xxxxx-xx-x" style=${{letterSpacing:.5}}/>
-        </div>
-        <div style=${{display:"flex",alignItems:"center",gap:8}}>
-          <div style=${{flex:1,height:1,background:C.border}}/><span style=${{fontSize:12,color:C.textLt}}>หรือ</span>
-          <div style=${{flex:1,height:1,background:C.border}}/>
-        </div>
-        <div>
-          <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>ชื่อ หรือ นามสกุล</label>
-          <input value=${snm} onChange=${e=>setSnm(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="กรอกชื่อหรือนามสกุล..."/>
-        </div>
+        <div><label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>เลขบัตรประชาชน 13 หลัก</label>
+          <input value=${sid} maxLength="13" onChange=${e=>setSid(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="x-xxxx-xxxxx-xx-x" style=${{letterSpacing:.5}}/></div>
+        <div style=${{display:"flex",alignItems:"center",gap:8}}><div style=${{flex:1,height:1,background:C.border}}/><span style=${{fontSize:12,color:C.textLt}}>หรือ</span><div style=${{flex:1,height:1,background:C.border}}/></div>
+        <div><label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:5}}>ชื่อ หรือ นามสกุล</label>
+          <input value=${snm} onChange=${e=>setSnm(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()} placeholder="กรอกชื่อหรือนามสกุล..."/></div>
         <button onClick=${doSearch} style=${{background:C.teal,color:"white",border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontWeight:700}}>ค้นหา</button>
       </div>
       ${res.length>0&&html`<div style=${{marginTop:16}}>
         <div style=${{fontSize:12,color:C.textMd,marginBottom:8}}>พบ ${res.length} ราย${res.length===20?" (แสดง 20 รายแรก)":""}</div>
         <div style=${{borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
           ${res.map((p,i)=>{const e=checkElig(p);return html`<div key=${p.idcard+i} onClick=${()=>selPt(p)}
-            style=${{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",
-              borderBottom:i<res.length-1?`1px solid ${C.border}`:"none",cursor:"pointer",background:"white"}}
+            style=${{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderBottom:i<res.length-1?`1px solid ${C.border}`:"none",cursor:"pointer",background:"white"}}
             onMouseEnter=${ev=>ev.currentTarget.style.background=C.bg}
             onMouseLeave=${ev=>ev.currentTarget.style.background="white"}>
             <div style=${{width:36,height:36,borderRadius:10,flexShrink:0,background:eb(e),display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:ec(e)}}>${e.icon}</div>
             <div style=${{flex:1,minWidth:0}}>
-              <div style=${{fontSize:13,fontWeight:700,color:C.textDk,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${p.titlename||p.title||""} ${p.fname} ${p.lname}</div>
-              <div style=${{fontSize:11,color:C.textMd}}>${MOO_NAME[p.moo]||"หมู่ "+p.moo} · บ้านเลขที่ ${p.hno} · อายุ ${p.age} ปี</div>
+              <div style=${{fontSize:13,fontWeight:700,color:C.textDk,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${p.titlename||""} ${p.fname} ${p.lname}</div>
+              <div style=${{fontSize:11,color:C.textMd}}>${MOO_NAME[String(p.moo||"").padStart(2,"0")]||"หมู่ "+p.moo} · บ้านเลขที่ ${p.hno} · อายุ ${p.age} ปี</div>
             </div>
-            <span style=${{fontSize:10,padding:"3px 8px",borderRadius:8,flexShrink:0,background:eb(e),color:ec(e),fontWeight:700}}>
-              ${e.ok?"มีสิทธิ์":e.col==="amber"?"ยังไม่ถึงกำหนด":"ไม่อยู่เกณฑ์"}
-            </span>
+            <span style=${{fontSize:10,padding:"3px 8px",borderRadius:8,flexShrink:0,background:eb(e),color:ec(e),fontWeight:700}}>${e.ok?"มีสิทธิ์":e.col==="amber"?"ยังไม่ถึงกำหนด":"ไม่อยู่เกณฑ์"}</span>
           </div>`;
           })}
         </div>
@@ -355,26 +366,20 @@ function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
     ${step===2&&pt&&el&&html`<div class="fade">
       <div style=${{...card,display:"flex",alignItems:"center",gap:12}}>
         <div style=${{width:48,height:48,borderRadius:14,background:C.tealLt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:700,color:C.teal,flexShrink:0}}>${(pt.fname||"?").charAt(0)}</div>
-        <div>
-          <div style=${{fontWeight:700,fontSize:15,color:C.textDk}}>${pt.titlename||pt.title||""} ${pt.fname} ${pt.lname}</div>
-          <div style=${{fontSize:12,color:C.textMd}}>${MOO_NAME[pt.moo]||pt.moo} · บ้านเลขที่ ${pt.hno} · อายุ ${pt.age} ปี</div>
-        </div>
+        <div><div style=${{fontWeight:700,fontSize:15,color:C.textDk}}>${pt.titlename||""} ${pt.fname} ${pt.lname}</div>
+          <div style=${{fontSize:12,color:C.textMd}}>${MOO_NAME[String(pt.moo||"").padStart(2,"0")]||pt.moo} · บ้านเลขที่ ${pt.hno} · อายุ ${pt.age} ปี</div></div>
       </div>
       <div style=${{...card,background:eb(el),border:`1.5px solid ${ec(el)}33`}}>
         <div style=${{display:"flex",gap:10,alignItems:"flex-start"}}>
           <span style=${{fontSize:22}}>${el.icon}</span>
-          <div>
-            <div style=${{fontWeight:700,fontSize:14,color:ec(el)}}>${el.ok?"มีสิทธิ์รับการตรวจ HPV Self-test":el.col==="amber"?"ยังไม่ถึงกำหนด 5 ปี":"ไม่อยู่ในเกณฑ์อายุ"}</div>
-            <div style=${{fontSize:12,color:C.textMd,marginTop:4,lineHeight:1.6}}>${el.reason}</div>
-          </div>
+          <div><div style=${{fontWeight:700,fontSize:14,color:ec(el)}}>${el.ok?"มีสิทธิ์รับการตรวจ HPV Self-test":el.col==="amber"?"ยังไม่ถึงกำหนด 5 ปี":"ไม่อยู่ในเกณฑ์อายุ"}</div>
+          <div style=${{fontSize:12,color:C.textMd,marginTop:4,lineHeight:1.6}}>${el.reason}</div></div>
         </div>
       </div>
       <div style=${{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        ${[
-          {lbl:"เลขบัตรประชาชน",val:fmtId(pt.idcard)},
-          {lbl:"สิทธิการรักษา",val:pt.rightname||pt.right||"-"},
-          {lbl:"ตรวจล่าสุด",val:(()=>{const sd=pt["วันคัดกรอง"]||pt.screendate||"";if(!sd.trim())return"ยังไม่เคยตรวจ";const d=parseBE(sd);return d?fmtBE(d):sd;})()},
-          {lbl:"วิธีตรวจ",val:(pt["วิธีตรวจ"]||pt.method||"")==="1B0046"?"HPV Genotyping":pt["วิธีตรวจ"]||pt.method||"-"},
+        ${[{lbl:"เลขบัตรประชาชน",val:fmtId(pt.idcard)},{lbl:"สิทธิการรักษา",val:pt.rightname||"-"},
+           {lbl:"ตรวจล่าสุด",val:(()=>{const sd=(pt["วันคัดกรอง"]||pt.screendate||"").trim();if(!sd)return"ยังไม่เคยตรวจ";const d=parseBE(sd);return d?fmtBE(d):sd;})()},
+           {lbl:"วิธีตรวจ",val:(pt["วิธีตรวจ"]||"")==="1B0046"?"HPV Genotyping":pt["วิธีตรวจ"]||"-"}
         ].map(f=>html`<div key=${f.lbl} style=${{background:C.bg,borderRadius:10,padding:"8px 10px"}}>
           <div style=${{fontSize:10,color:C.textLt,fontWeight:600}}>${f.lbl}</div>
           <div style=${{fontSize:12,fontWeight:700,color:C.textDk,marginTop:2}}>${f.val}</div>
@@ -382,20 +387,16 @@ function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
       </div>
       <div style=${{display:"flex",gap:8}}>
         <button onClick=${reset} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
-        ${el.ok
-          ?html`<button onClick=${()=>{setStep(3);setSelD(null);setSelT("");}} style=${{flex:2,background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>จองคิวตรวจ HPV</button>`
-          :html`<button disabled style=${{flex:2,background:C.bg,color:C.textLt,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14}}>ไม่สามารถจองได้</button>`
-        }
+        ${el.ok?html`<button onClick=${()=>{setStep(3);setSelD(null);setSelT("");}} style=${{flex:2,background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>จองคิวตรวจ HPV</button>`:
+                 html`<button disabled style=${{flex:2,background:C.bg,color:C.textLt,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14}}>ไม่สามารถจองได้</button>`}
       </div>
     </div>`}
 
     ${step===3&&pt&&html`<div class="fade" style=${card}>
       <div style=${{display:"flex",alignItems:"center",gap:10,marginBottom:14,paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
         <div style=${{width:38,height:38,borderRadius:10,background:C.tealLt,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:C.teal,flexShrink:0}}>${(pt.fname||"?").charAt(0)}</div>
-        <div>
-          <div style=${{fontWeight:700,fontSize:14,color:C.textDk}}>${pt.titlename||pt.title||""} ${pt.fname} ${pt.lname}</div>
-          <div style=${{fontSize:11,color:C.textMd}}>${MOO_NAME[pt.moo]||pt.moo}</div>
-        </div>
+        <div><div style=${{fontWeight:700,fontSize:14,color:C.textDk}}>${pt.titlename||""} ${pt.fname} ${pt.lname}</div>
+        <div style=${{fontSize:11,color:C.textMd}}>${MOO_NAME[String(pt.moo||"").padStart(2,"0")]||pt.moo}</div></div>
       </div>
       <div style=${{background:C.tealLt,borderRadius:10,padding:"8px 12px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
         <${Ico} name="calendar" size=${16} color=${C.teal}/>
@@ -404,13 +405,9 @@ function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
       <div style=${{marginBottom:16}}>
         <div style=${{fontSize:13,fontWeight:700,color:C.textDk,marginBottom:8}}>เลือกวันที่</div>
         <div style=${{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
-          ${AVAIL.map(d=>{
-            const dk=dKey(d),isSel=selD&&d.getTime()===selD.getTime();
+          ${AVAIL.map(d=>{const dk=dKey(d),isSel=selD&&d.getTime()===selD.getTime();
             return html`<button key=${dk} onClick=${()=>{setSelD(d);setSelT("");}}
-              style=${{background:isSel?C.teal:"white",color:isSel?"white":C.textDk,
-                border:`1.5px solid ${isSel?C.teal:C.border}`,borderRadius:12,padding:"8px 4px",
-                display:"flex",flexDirection:"column",alignItems:"center",gap:1,
-                boxShadow:isSel?`0 4px 10px ${C.teal}44`:"0 1px 2px rgba(0,0,0,.06)"}}>
+              style=${{background:isSel?C.teal:"white",color:isSel?"white":C.textDk,border:`1.5px solid ${isSel?C.teal:C.border}`,borderRadius:12,padding:"8px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,boxShadow:isSel?`0 4px 10px ${C.teal}44`:"0 1px 2px rgba(0,0,0,.06)"}}>
               <span style=${{fontSize:9,opacity:.75,fontWeight:600}}>${d.getDay()===1?"จันทร์":"ศุกร์"}</span>
               <span style=${{fontSize:18,fontWeight:700,lineHeight:1.1}}>${d.getDate()}</span>
               <span style=${{fontSize:9,opacity:.7}}>${THM_S[d.getMonth()]} ${String(d.getFullYear()+543).slice(2)}</span>
@@ -423,8 +420,7 @@ function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
         <div style=${{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
           ${TIME_SLOTS.map(t=>{const full=sf(t),sel=selT===t,cnt=sc(t);
             return html`<button key=${t} onClick=${()=>!full&&setSelT(t)} disabled=${full}
-              style=${{background:full?C.bg:sel?C.teal:"white",color:full?C.textLt:sel?"white":C.textDk,
-                border:`1.5px solid ${full?C.border:sel?C.teal:C.borderMd}`,borderRadius:10,padding:"9px 0",opacity:full?.45:1}}>
+              style=${{background:full?C.bg:sel?C.teal:"white",color:full?C.textLt:sel?"white":C.textDk,border:`1.5px solid ${full?C.border:sel?C.teal:C.borderMd}`,borderRadius:10,padding:"9px 0",opacity:full?.45:1}}>
               <div style=${{fontSize:13,fontWeight:700}}>${t}</div>
               <div style=${{fontSize:9,color:full?C.textLt:sel?"rgba(255,255,255,.7)":C.textLt,marginTop:1}}>${full?"เต็ม":cnt>0?cnt+"/"+MAX_SLOT:"ว่าง"}</div>
             </button>`;
@@ -438,9 +434,7 @@ function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
       <div style=${{display:"flex",gap:8}}>
         <button onClick=${()=>setStep(2)} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
         <button onClick=${confirmBook} disabled=${!selD||!selT}
-          style=${{flex:2,background:selD&&selT?C.teal:C.bg,color:selD&&selT?"white":C.textLt,border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>
-          ยืนยันการจอง
-        </button>
+          style=${{flex:2,background:selD&&selT?C.teal:C.bg,color:selD&&selT?"white":C.textLt,border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>ยืนยันการจอง</button>
       </div>
     </div>`}
 
@@ -448,26 +442,17 @@ function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
       <div style=${{...card,textAlign:"center",paddingTop:"1.5rem"}}>
         <div style=${{width:64,height:64,borderRadius:20,background:C.tealLt,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",fontSize:30,color:C.teal}}>✓</div>
         <div style=${{fontWeight:700,fontSize:18,color:C.textDk}}>จองคิวสำเร็จ</div>
-        <div style=${{fontSize:13,color:C.textMd,marginTop:4}}>ระบบบันทึกการจองเรียบร้อยแล้ว</div>
         <div style=${{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:8,minHeight:22}}>
           ${syncSt==="ing"&&html`<><div style=${{width:14,height:14,border:`2px solid ${C.teal}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 1s linear infinite"}}/><span style=${{fontSize:12,color:C.textMd}}>กำลัง sync Google Sheets...</span></>`}
           ${syncSt==="ok"&&html`<span style=${{fontSize:12,color:C.teal,fontWeight:700}}>✓ บันทึกใน Google Sheets แล้ว</span>`}
-          ${syncSt==="err"&&html`<span style=${{fontSize:12,color:C.amber}}>⚠ sync Sheets ไม่สำเร็จ (เก็บในเครื่อง)</span>`}
+          ${syncSt==="err"&&html`<span style=${{fontSize:12,color:C.amber}}>⚠ sync ไม่สำเร็จ (เก็บในเครื่อง)</span>`}
         </div>
       </div>
       <div style=${card}>
-        <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:12}}>รายละเอียดนัดหมาย</div>
-        ${[
-          {lbl:"ชื่อ-นามสกุล",val:conf.name},
-          {lbl:"หมู่บ้าน",val:`${conf.village} บ้านเลขที่ ${conf.hno}`},
-          {lbl:"วันที่",val:`วัน${conf._dayTh} ${conf._dateLabel}`},
-          {lbl:"เวลา",val:`${conf.time} น.`},
-          {lbl:"บริการ",val:"HPV Self-test"},
-          ...(conf.note?[{lbl:"หมายเหตุ",val:conf.note}]:[]),
-        ].map(f=>html`<div key=${f.lbl} style=${{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
-          <span style=${{fontSize:12,color:C.textMd}}>${f.lbl}</span>
-          <span style=${{fontSize:12,fontWeight:700,color:C.textDk,textAlign:"right",maxWidth:220}}>${f.val}</span>
-        </div>`)}
+        ${[{lbl:"ชื่อ-นามสกุล",val:conf.name},{lbl:"หมู่บ้าน",val:`${conf.village} บ้านเลขที่ ${conf.hno}`},{lbl:"วันที่",val:`วัน${conf._dayTh} ${conf._dateLabel}`},{lbl:"เวลา",val:`${conf.time} น.`},{lbl:"บริการ",val:"HPV Self-test"},...(conf.note?[{lbl:"หมายเหตุ",val:conf.note}]:[])]
+          .map(f=>html`<div key=${f.lbl} style=${{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
+            <span style=${{fontSize:12,color:C.textMd}}>${f.lbl}</span><span style=${{fontSize:12,fontWeight:700,color:C.textDk,textAlign:"right",maxWidth:220}}>${f.val}</span>
+          </div>`)}
       </div>
       <div style=${{background:C.tealLt,borderRadius:14,padding:"10px 14px",display:"flex",gap:8,alignItems:"flex-start",marginBottom:12}}>
         <${Ico} name="info" size=${16} color=${C.teal}/>
@@ -479,45 +464,45 @@ function BookingTab({patients,bookings,onAddBooking,slotCount,slotFull}){
 }
 
 /* ============================================================
-   LIST TAB (admin)
+   LIST TAB
    ============================================================ */
 function ListTab({bookings,onDelete,onRefresh,lastSync}){
-  const [delId,setDelId]=useState(null);
-  const [doing,setDoing]=useState(false);
+  const [delId,setDelId]=useState(null); const [doing,setDoing]=useState(false);
+  const apiUrl=localStorage.getItem(KEY_URL)||"";
   async function confirmDel(id){
     setDoing(true);
-    try{ await apiPost({action:"deleteBooking",id}); onDelete(id); }
-    catch(e){ alert("เกิดข้อผิดพลาด: "+e.message); }
+    try{if(apiUrl)await apiPost(apiUrl,{action:"deleteBooking",id});onDelete(id);}
+    catch(e){alert("เกิดข้อผิดพลาด: "+e.message);}
     setDoing(false);setDelId(null);
   }
   return html`<div class="fade">
     <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div style=${{fontWeight:700,fontSize:16,color:C.textDk}}>รายการจองคิว (${bookings.length} ราย)</div>
-      <div style=${{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
+      <div style=${{display:"flex",gap:6,alignItems:"center"}}>
+        ${lastSync&&html`<span style=${{fontSize:10,color:C.textLt}}>${lastSync}</span>`}
         <button onClick=${onRefresh} style=${{background:C.tealLt,color:C.teal,border:"none",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
           <${Ico} name="refresh" size=${14} color=${C.teal}/> รีเฟรช
         </button>
-        ${lastSync&&html`<span style=${{fontSize:10,color:C.textLt}}>sync ${lastSync}</span>`}
       </div>
     </div>
     ${bookings.length===0?html`<div style=${{...card,textAlign:"center",padding:"40px 0",color:C.textLt}}><${Ico} name="calendar" size=${36} color=${C.border}/><div style=${{marginTop:10,fontSize:14}}>ยังไม่มีรายการจอง</div></div>`:""}
     <div style=${{display:"flex",flexDirection:"column",gap:8}}>
-      ${[...bookings].reverse().map(bk=>html`
-      <div key=${bk.id||bk["id"]} style=${{...card,marginBottom:0}}>
-        <div style=${{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-          <div style=${{flex:1,minWidth:0}}>
-            <div style=${{fontWeight:700,fontSize:14,color:C.textDk}}>${bk.name||bk["ชื่อ-นามสกุล"]||""}</div>
-            <div style=${{fontSize:11,color:C.textMd,marginTop:2}}>${bk.village||bk["หมู่บ้าน"]||""} · ${bk.idcard||bk["เลขบัตรประชาชน"]||""}</div>
+      ${[...bookings].reverse().map(bk=>{const id=bk.id||bk["id"];return html`
+        <div key=${id} style=${{...card,marginBottom:0}}>
+          <div style=${{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style=${{flex:1,minWidth:0}}>
+              <div style=${{fontWeight:700,fontSize:14,color:C.textDk}}>${bk.name||bk["ชื่อ-นามสกุล"]||""}</div>
+              <div style=${{fontSize:11,color:C.textMd,marginTop:2}}>${bk.village||bk["หมู่บ้าน"]||""} · ${bk.idcard||bk["เลขบัตรประชาชน"]||""}</div>
+            </div>
+            <button onClick=${()=>setDelId(id)} disabled=${doing} style=${{background:C.redLt,color:C.red,border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>ยกเลิก</button>
           </div>
-          <button onClick=${()=>setDelId(bk.id||bk["id"])} disabled=${doing}
-            style=${{background:C.redLt,color:C.red,border:"none",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,flexShrink:0}}>ยกเลิก</button>
-        </div>
-        <div style=${{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-          <span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.tealLt,color:C.teal,fontWeight:700}}>${bk._dateLabel||bk["วันที่นัด"]||""} · ${bk.time||bk["เวลา"]||""} น.</span>
-          <span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.bg,color:C.textMd}}>HPV Self-test</span>
-          ${(bk.synced||bk._synced)&&html`<span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.greenLt,color:C.green,fontWeight:700}}>✓ Sheets</span>`}
-        </div>
-      </div>`)}
+          <div style=${{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+            <span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.tealLt,color:C.teal,fontWeight:700}}>${bk._dateLabel||bk["วันที่นัด"]||""} · ${bk.time||bk["เวลา"]||""} น.</span>
+            <span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.bg,color:C.textMd}}>HPV Self-test</span>
+            ${bk.synced&&html`<span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.greenLt,color:C.green,fontWeight:700}}>✓ Sheets</span>`}
+          </div>
+        </div>`;
+      })}
     </div>
     ${delId&&html`<div style=${{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style=${{background:"white",borderRadius:20,padding:24,maxWidth:320,width:"100%"}}>
@@ -525,10 +510,7 @@ function ListTab({bookings,onDelete,onRefresh,lastSync}){
         <div style=${{fontSize:13,color:C.textMd,marginBottom:16}}>รายการนี้จะถูกยกเลิกทั้งในแอปและ Google Sheets</div>
         <div style=${{display:"flex",gap:8}}>
           <button onClick=${()=>setDelId(null)} style=${{flex:1,background:"#F1F5F9",border:"none",borderRadius:10,padding:"10px 0",fontSize:14,fontWeight:600}}>ยกเลิก</button>
-          <button onClick=${()=>confirmDel(delId)} disabled=${doing}
-            style=${{flex:1,background:C.red,color:"white",border:"none",borderRadius:10,padding:"10px 0",fontSize:14,fontWeight:700}}>
-            ${doing?"กำลังลบ...":"ยืนยัน"}
-          </button>
+          <button onClick=${()=>confirmDel(delId)} disabled=${doing} style=${{flex:1,background:C.red,color:"white",border:"none",borderRadius:10,padding:"10px 0",fontSize:14,fontWeight:700}}>${doing?"กำลังลบ...":"ยืนยัน"}</button>
         </div>
       </div>
     </div>`}
@@ -536,10 +518,10 @@ function ListTab({bookings,onDelete,onRefresh,lastSync}){
 }
 
 /* ============================================================
-   STATS TAB (admin)
+   STATS TAB
    ============================================================ */
 function StatsTab({patients,bookings,onRefresh,lastSync}){
-  const screened=useMemo(()=>patients.filter(p=>(p["วันคัดกรอง"]||p.screendate||"").trim()).length,[patients]);
+  const screened=useMemo(()=>patients.filter(p=>(p["วันคัดกรอง"]||"").trim()).length,[patients]);
   const pct=patients.length?Math.round(screened/patients.length*100):0;
   return html`<div class="fade">
     <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -549,9 +531,8 @@ function StatsTab({patients,bookings,onRefresh,lastSync}){
       </button>
     </div>
     ${lastSync&&html`<div style=${{fontSize:11,color:C.textLt,marginBottom:8,textAlign:"right"}}>อัปเดตล่าสุด: ${lastSync}</div>`}
-
     <div style=${card}>
-      <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:14}}>ภาพรวม HPV Self-test</div>
+      <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:14}}>ภาพรวม</div>
       <div style=${{marginBottom:14}}>
         <div style=${{display:"flex",justifyContent:"space-between",marginBottom:6}}>
           <span style=${{fontSize:13,color:C.textMd}}>ตรวจแล้ว</span>
@@ -562,22 +543,18 @@ function StatsTab({patients,bookings,onRefresh,lastSync}){
         </div>
       </div>
       <div style=${{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-        ${[
-          {lbl:"เป้าหมาย",val:patients.length,col:C.textDk},
-          {lbl:"ตรวจแล้ว",val:screened,col:C.teal},
-          {lbl:"คงเหลือ",val:patients.length-screened,col:C.amber},
-        ].map(c=>html`<div key=${c.lbl} style=${{background:C.bg,borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-          <div style=${{fontSize:10,color:C.textLt,fontWeight:600}}>${c.lbl}</div>
-          <div style=${{fontSize:26,fontWeight:700,color:c.col}}>${c.val}</div>
-        </div>`)}
+        ${[{lbl:"เป้าหมาย",val:patients.length,col:C.textDk},{lbl:"ตรวจแล้ว",val:screened,col:C.teal},{lbl:"คงเหลือ",val:patients.length-screened,col:C.amber}]
+          .map(c=>html`<div key=${c.lbl} style=${{background:C.bg,borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+            <div style=${{fontSize:10,color:C.textLt,fontWeight:600}}>${c.lbl}</div>
+            <div style=${{fontSize:26,fontWeight:700,color:c.col}}>${c.val}</div>
+          </div>`)}
       </div>
     </div>
-
     <div style=${card}>
       <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:14}}>รายหมู่บ้าน</div>
       ${Object.entries(MOO_NAME).map(([moo,name])=>{
         const all=patients.filter(p=>String(p.moo||"").padStart(2,"0")===moo);
-        const done=all.filter(p=>(p["วันคัดกรอง"]||p.screendate||"").trim());
+        const done=all.filter(p=>(p["วันคัดกรอง"]||"").trim());
         const p2=all.length?Math.round(done.length/all.length*100):0;
         const nd=all.length-done.length;
         return html`<div key=${moo} style=${{marginBottom:14}}>
@@ -585,36 +562,13 @@ function StatsTab({patients,bookings,onRefresh,lastSync}){
             <div style=${{fontSize:13,fontWeight:600,color:C.textDk}}>${name}</div>
             <div style=${{display:"flex",gap:6,alignItems:"center"}}>
               <span style=${{fontSize:11,color:C.textMd}}>${done.length}/${all.length}</span>
-              <span style=${{fontSize:10,padding:"2px 7px",borderRadius:8,background:nd>0?C.amberLt:C.greenLt,color:nd>0?C.amber:C.green,fontWeight:700}}>
-                ${nd>0?"รอ "+nd:"ครบ ✓"}
-              </span>
+              <span style=${{fontSize:10,padding:"2px 7px",borderRadius:8,background:nd>0?C.amberLt:C.greenLt,color:nd>0?C.amber:C.green,fontWeight:700}}>${nd>0?"รอ "+nd:"ครบ ✓"}</span>
             </div>
           </div>
-          <div style=${{height:8,background:C.bg,borderRadius:4,overflow:"hidden"}}>
-            <div style=${{height:"100%",width:p2+"%",background:p2>=70?C.teal:p2>=40?C.tealMd:"#F59E0B",borderRadius:4}}/>
-          </div>
+          <div style=${{height:8,background:C.bg,borderRadius:4,overflow:"hidden"}}><div style=${{height:"100%",width:p2+"%",background:p2>=70?C.teal:p2>=40?C.tealMd:"#F59E0B",borderRadius:4}}/></div>
         </div>`;
       })}
     </div>
-
-    ${bookings.length>0&&(()=>{
-      const byDate={};
-      bookings.forEach(bk=>{
-        const dk=bk._dk||bk["วันที่นัด"]||"";
-        byDate[dk]=byDate[dk]||{label:bk._dateLabel||bk["วันที่นัด"]||dk,items:[]};
-        byDate[dk].items.push(bk);
-      });
-      return html`<div style=${card}>
-        <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:12}}>การจองคิว (${bookings.length} ราย)</div>
-        ${Object.entries(byDate).sort((a,b)=>a[0].localeCompare(b[0])).map(([k,v])=>html`
-        <div key=${k} style=${{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
-          <div style=${{fontWeight:700,fontSize:12,color:C.textDk,marginBottom:6}}>${v.label} (${v.items.length} ราย)</div>
-          <div style=${{display:"flex",gap:6,flexWrap:"wrap"}}>
-            ${v.items.map(b=>html`<span key=${b.id} style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.tealLt,color:C.teal,fontWeight:600}}>${b.time||b["เวลา"]||""} · ${b.name||(b["ชื่อ-นามสกุล"]||"").split(" ")[1]||""}</span>`)}
-          </div>
-        </div>`)}
-      </div>`;
-    })()}
   </div>`;
 }
 
@@ -622,121 +576,72 @@ function StatsTab({patients,bookings,onRefresh,lastSync}){
    MAIN APP
    ============================================================ */
 function App(){
-  const [patients,  setPatients]  = useState([]);
-  const [bookings,  setBookings]  = useState([]);
-  const [slotMap,   setSlotMap]   = useState({});
-  const [loading,   setLoading]   = useState(true);
-  const [loadErr,   setLoadErr]   = useState(null);
-  const [tab,       setTab]       = useState("book");
-  const [isAdmin,   setIsAdmin]   = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  const [lastSync,  setLastSync]  = useState(null);
+  const [apiUrl,setApiUrl] = useState(localStorage.getItem(KEY_URL)||"");
+  const [patients,setPatients] = useState([]);
+  const [bookings,setBookings] = useState([]);
+  const [slotMap,setSlotMap]   = useState({});
+  const [loading,setLoading]   = useState(false);
+  const [lastSync,setLastSync] = useState(null);
+  const [tab,setTab]           = useState("book");
+  const [isAdmin,setIsAdmin]   = useState(false);
+  const [showLogin,setShowLogin]= useState(false);
 
-  // ---- ตรวจสอบ admin session ----
   useEffect(()=>{
-    try{
-      const r=localStorage.getItem(ADMIN_KEY);
-      if(r){const{expiry}=JSON.parse(r);if(Date.now()<expiry)setIsAdmin(true);else localStorage.removeItem(ADMIN_KEY);}
-    }catch{}
+    try{const r=localStorage.getItem(KEY_ADM);if(r){const{expiry}=JSON.parse(r);if(Date.now()<expiry)setIsAdmin(true);else localStorage.removeItem(KEY_ADM);}}catch{}
+    try{const cb=localStorage.getItem(KEY_BK);if(cb){const b=JSON.parse(cb);setBookings(b);rebuildSlots(b);}}catch{}
+    try{const cp=localStorage.getItem(KEY_PT);if(cp)setPatients(JSON.parse(cp));}catch{}
   },[]);
 
-  // ---- โหลดข้อมูลจาก Google Sheets ----
   async function fetchAll(silent=false){
-    if(!APPS_SCRIPT_URL){ setLoading(false); return; }
-    if(!silent) setLoading(true);
-    setLoadErr(null);
+    const url=localStorage.getItem(KEY_URL)||"";
+    if(!url)return;
+    if(!silent)setLoading(true);
     try{
-      const [pr,br] = await Promise.all([apiGet("getPatients"),apiGet("getBookings")]);
-      const pts = pr.patients||[];
-      const bks = br.bookings||[];
+      const [pr,br]=await Promise.all([jsonpGet(url,{action:"getPatients"}),jsonpGet(url,{action:"getBookings"})]);
+      const pts=pr.patients||[];
+      const sheetBks=br.bookings||[];
       setPatients(pts);
-      // merge bookings: ดึงจาก sheets + เพิ่ม local ที่ยัง sync ไม่สำเร็จ
-      const sheetIds = new Set(bks.map(b=>String(b.id)));
-      const local = (JSON.parse(localStorage.getItem(STORAGE_BOOKINGS)||"[]")).filter(b=>!sheetIds.has(String(b.id)));
-      const merged = [...bks,...local];
-      setBookings(merged);
-      rebuildSlots(merged);
-      // cache
-      localStorage.setItem(STORAGE_PATIENTS,JSON.stringify(pts));
-      localStorage.setItem(STORAGE_BOOKINGS,JSON.stringify(merged));
+      const sheetIds=new Set(sheetBks.map(b=>String(b.id||b["id"])));
+      const local=(JSON.parse(localStorage.getItem(KEY_BK)||"[]")).filter(b=>!sheetIds.has(String(b.id)));
+      const merged=[...sheetBks,...local];
+      setBookings(merged);rebuildSlots(merged);
+      localStorage.setItem(KEY_PT,JSON.stringify(pts));
+      localStorage.setItem(KEY_BK,JSON.stringify(merged));
       setLastSync(new Date().toLocaleTimeString("th-TH"));
-    }catch(e){
-      setLoadErr(e.message);
-      // ใช้ cache ถ้ามี
-      try{
-        const cp=localStorage.getItem(STORAGE_PATIENTS);
-        const cb=localStorage.getItem(STORAGE_BOOKINGS);
-        if(cp) setPatients(JSON.parse(cp));
-        if(cb){ const b=JSON.parse(cb);setBookings(b);rebuildSlots(b); }
-      }catch{}
-    }
+    }catch(e){console.warn("Sync error:",e.message);}
     setLoading(false);
   }
 
-  // ---- โหลดครั้งแรก ----
-  useEffect(()=>{
-    if(!APPS_SCRIPT_URL){
-      // โหลด cache ถ้ามี
-      try{
-        const cp=localStorage.getItem(STORAGE_PATIENTS);
-        const cb=localStorage.getItem(STORAGE_BOOKINGS);
-        if(cp) setPatients(JSON.parse(cp));
-        if(cb){ const b=JSON.parse(cb);setBookings(b);rebuildSlots(b); }
-      }catch{}
-      setLoading(false);
-    } else {
-      fetchAll();
-    }
-  },[]);
+  useEffect(()=>{if(apiUrl)fetchAll();},[apiUrl]);
+  useEffect(()=>{if(!apiUrl)return;const t=setInterval(()=>fetchAll(true),SYNC_MS);return()=>clearInterval(t);},[apiUrl]);
 
-  // ---- Auto-sync ทุก 60 วินาที ----
-  useEffect(()=>{
-    if(!APPS_SCRIPT_URL) return;
-    const t=setInterval(()=>fetchAll(true),SYNC_INTERVAL);
-    return()=>clearInterval(t);
-  },[]);
-
-  function rebuildSlots(list){
-    const m={};
-    list.forEach(bk=>{const k=(bk._dk||"")+"-"+(bk.time||bk["เวลา"]||"");m[k]=(m[k]||0)+1;});
-    setSlotMap(m);
-  }
-  function slotCount(dk,t){ return slotMap[dk+"-"+t]||0; }
-  function slotFull(dk,t,max){ return slotCount(dk,t)>=max; }
-
-  function onAddBooking(bk,isSyncedUpdate=false){
-    setBookings(prev=>{
-      const updated = isSyncedUpdate ? prev.map(b=>b.id===bk.id?{...b,synced:true}:b) : [...prev,bk];
-      localStorage.setItem(STORAGE_BOOKINGS,JSON.stringify(updated));
-      rebuildSlots(updated);
-      return updated;
-    });
+  function rebuildSlots(list){const m={};list.forEach(bk=>{const k=(bk._dk||"")+"-"+(bk.time||bk["เวลา"]||"");m[k]=(m[k]||0)+1;});setSlotMap(m);}
+  function slotCount(dk,t){return slotMap[dk+"-"+t]||0;}
+  function slotFull(dk,t,max){return slotCount(dk,t)>=max;}
+  function onAddBooking(bk,update=false){
+    setBookings(prev=>{const u=update?prev.map(b=>b.id===bk.id?{...b,synced:true}:b):[...prev,bk];localStorage.setItem(KEY_BK,JSON.stringify(u));rebuildSlots(u);return u;});
   }
   function onDeleteBooking(id){
-    setBookings(prev=>{
-      const updated=prev.filter(b=>String(b.id)!==String(id)&&String(b["id"])!==String(id));
-      localStorage.setItem(STORAGE_BOOKINGS,JSON.stringify(updated));
-      rebuildSlots(updated);
-      return updated;
-    });
+    setBookings(prev=>{const u=prev.filter(b=>String(b.id)!==String(id)&&String(b["id"])!==String(id));localStorage.setItem(KEY_BK,JSON.stringify(u));rebuildSlots(u);return u;});
   }
+  function doLogin(pin){if(pin===ADMIN_PIN){localStorage.setItem(KEY_ADM,JSON.stringify({expiry:Date.now()+SESSION_H*3600*1000}));setIsAdmin(true);setShowLogin(false);return true;}return false;}
+  function doLogout(){localStorage.removeItem(KEY_ADM);setIsAdmin(false);}
+  function onSaveUrl(u){setApiUrl(u);}
 
-  function doLogin(pin){
-    if(pin===ADMIN_PIN){
-      localStorage.setItem(ADMIN_KEY,JSON.stringify({expiry:Date.now()+SESSION_H*3600*1000}));
-      setIsAdmin(true);setShowLogin(false);return true;
-    }
-    return false;
-  }
-  function doLogout(){ localStorage.removeItem(ADMIN_KEY);setIsAdmin(false); }
-
-  const screened=useMemo(()=>patients.filter(p=>(p["วันคัดกรอง"]||p.screendate||"").trim()).length,[patients]);
-
+  const screened=useMemo(()=>patients.filter(p=>(p["วันคัดกรอง"]||"").trim()).length,[patients]);
   const TABS=[
-    {id:"book", icon:"calendar", lbl:"จองคิว",  admin:false},
-    {id:"list", icon:"list",     lbl:"รายการ",  admin:true},
-    {id:"stats",icon:"chart",    lbl:"สถิติ",   admin:true},
+    {id:"book",  icon:"calendar", lbl:"จองคิว",  admin:false},
+    {id:"list",  icon:"list",     lbl:"รายการ",  admin:true},
+    {id:"stats", icon:"chart",    lbl:"สถิติ",   admin:true},
+    {id:"setup", icon:"settings", lbl:"ตั้งค่า", admin:true},
   ];
+
+  function LockedScreen(){return html`<div style=${{textAlign:"center",padding:"60px 20px"}}>
+    <div style=${{width:64,height:64,borderRadius:20,background:C.tealLt,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><${Ico} name="lock" size=${28} color=${C.teal}/></div>
+    <div style=${{fontWeight:700,fontSize:16,color:C.textDk}}>สำหรับแอดมินเท่านั้น</div>
+    <div style=${{fontSize:13,color:C.textMd,marginTop:6,marginBottom:20}}>กรุณาเข้าสู่ระบบเพื่อดูข้อมูลส่วนนี้</div>
+    <button onClick=${()=>setShowLogin(true)} style=${{background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 28px",fontSize:14,fontWeight:700}}>เข้าสู่ระบบแอดมิน</button>
+  </div>`;}
 
   return html`<div style=${{fontFamily:"inherit",background:C.bg,minHeight:"100vh"}}>
     <!-- HEADER -->
@@ -752,27 +657,24 @@ function App(){
         ${isAdmin
           ?html`<div style=${{display:"flex",alignItems:"center",gap:6}}>
             <span style=${{background:"rgba(255,255,255,.2)",borderRadius:8,padding:"3px 8px",fontSize:11,color:"white",fontWeight:600}}>แอดมิน</span>
-            <button onClick=${doLogout} style=${{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,padding:"5px 8px",display:"flex",cursor:"pointer"}}>
-              <${Ico} name="logout" size=${16} color="white"/>
-            </button>
+            <button onClick=${doLogout} style=${{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,padding:"5px 8px",display:"flex",cursor:"pointer"}}><${Ico} name="logout" size=${16} color="white"/></button>
           </div>`
           :html`<button onClick=${()=>setShowLogin(true)} style=${{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:"white",fontSize:12,fontWeight:600}}>
             <${Ico} name="lock" size=${14} color="white"/> แอดมิน
           </button>`
         }
       </div>
-      <!-- CHIPS -->
       <div style=${{display:"flex",gap:8,marginTop:12,overflowX:"auto",paddingBottom:2}}>
-        ${[
-          {lbl:"เป้าหมาย",val:patients.length},
-          {lbl:"ตรวจแล้ว",val:screened},
-          {lbl:"คงเหลือ",val:patients.length-screened},
-          {lbl:"จองคิว",val:bookings.length},
-        ].map(c=>html`<div key=${c.lbl} style=${{background:"rgba(255,255,255,.15)",borderRadius:10,padding:"5px 12px",minWidth:70,textAlign:"center",flexShrink:0}}>
-          <div style=${{color:"rgba(255,255,255,.75)",fontSize:10,fontWeight:600}}>${c.lbl}</div>
-          <div style=${{color:"white",fontWeight:700,fontSize:20,lineHeight:1.2}}>${c.val}</div>
-        </div>`)}
-        ${lastSync&&html`<div style=${{background:"rgba(255,255,255,.1)",borderRadius:10,padding:"5px 8px",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+        ${[{lbl:"เป้าหมาย",val:patients.length},{lbl:"ตรวจแล้ว",val:screened},{lbl:"คงเหลือ",val:patients.length-screened},{lbl:"จองคิว",val:bookings.length}]
+          .map(c=>html`<div key=${c.lbl} style=${{background:"rgba(255,255,255,.15)",borderRadius:10,padding:"5px 12px",minWidth:70,textAlign:"center",flexShrink:0}}>
+            <div style=${{color:"rgba(255,255,255,.75)",fontSize:10,fontWeight:600}}>${c.lbl}</div>
+            <div style=${{color:"white",fontWeight:700,fontSize:20,lineHeight:1.2}}>${c.val}</div>
+          </div>`)}
+        ${loading&&html`<div style=${{background:"rgba(255,255,255,.15)",borderRadius:10,padding:"5px 10px",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+          <div style=${{width:12,height:12,border:"2px solid rgba(255,255,255,.4)",borderTopColor:"white",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+          <span style=${{color:"rgba(255,255,255,.8)",fontSize:10}}>กำลัง sync...</span>
+        </div>`}
+        ${!loading&&lastSync&&html`<div style=${{background:"rgba(255,255,255,.1)",borderRadius:10,padding:"5px 8px",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
           <${Ico} name="refresh" size=${10} color="rgba(255,255,255,.7)"/>
           <span style=${{color:"rgba(255,255,255,.7)",fontSize:10}}>${lastSync}</span>
         </div>`}
@@ -781,47 +683,25 @@ function App(){
 
     <!-- CONTENT -->
     <div style=${{padding:"14px 14px 80px"}}>
-      ${!APPS_SCRIPT_URL&&html`<${NoConfigScreen}/>`}
-      ${APPS_SCRIPT_URL&&loading&&html`<${LoadingScreen}/>`}
-      ${APPS_SCRIPT_URL&&!loading&&loadErr&&html`<div style=${{...card,background:"#FEF2F2",border:`1px solid ${C.red}33`}}>
-        <div style=${{fontWeight:700,color:C.red,marginBottom:4}}>⚠ โหลดข้อมูลไม่สำเร็จ</div>
-        <div style=${{fontSize:12,color:C.textMd,marginBottom:10}}>${loadErr}</div>
-        <div style=${{fontSize:12,color:C.textMd,marginBottom:10}}>กำลังแสดงข้อมูล cache จากครั้งก่อน</div>
-        <button onClick=${()=>fetchAll()} style=${{background:C.teal,color:"white",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600}}>ลองใหม่</button>
-      </div>`}
-      ${(!APPS_SCRIPT_URL||!loading)&&tab==="book"&&html`<${BookingTab} patients=${patients} bookings=${bookings} onAddBooking=${onAddBooking} slotCount=${slotCount} slotFull=${slotFull}/>`}
-      ${tab==="list"&&(isAdmin?html`<${ListTab} bookings=${bookings} onDelete=${onDeleteBooking} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen} onUnlock=${()=>setShowLogin(true)}/>`)}
-      ${tab==="stats"&&(isAdmin?html`<${StatsTab} patients=${patients} bookings=${bookings} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen} onUnlock=${()=>setShowLogin(true)}/>`)}
+      ${tab==="book"  && html`<${BookingTab} apiUrl=${apiUrl} patients=${patients} bookings=${bookings} onAddBooking=${onAddBooking} slotCount=${slotCount} slotFull=${slotFull}/>`}
+      ${tab==="list"  && (isAdmin?html`<${ListTab} bookings=${bookings} onDelete=${onDeleteBooking} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
+      ${tab==="stats" && (isAdmin?html`<${StatsTab} patients=${patients} bookings=${bookings} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
+      ${tab==="setup" && (isAdmin?html`<${SettingsScreen} onSave=${onSaveUrl}/>`:html`<${LockedScreen}/>`)}
     </div>
 
     <!-- BOTTOM NAV -->
     <nav style=${{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"white",borderTop:`1px solid ${C.border}`,boxShadow:"0 -4px 20px rgba(0,0,0,.08)",display:"flex",height:64,zIndex:100}}>
-      ${TABS.map(t=>{
-        const active=tab===t.id,locked=t.admin&&!isAdmin;
+      ${TABS.map(t=>{const active=tab===t.id,locked=t.admin&&!isAdmin;
         return html`<button key=${t.id} onClick=${()=>{if(t.admin&&!isAdmin){setShowLogin(true);}else setTab(t.id);}}
-          style=${{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"none",border:"none",cursor:"pointer",
-            borderTop:`2.5px solid ${active?C.teal:"transparent"}`,position:"relative"}}>
+          style=${{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"none",border:"none",cursor:"pointer",borderTop:`2.5px solid ${active?C.teal:"transparent"}`,position:"relative"}}>
           <${Ico} name=${t.icon} size=${22} color=${active?C.teal:locked?"#CBD5E1":C.textLt}/>
           <span style=${{fontSize:11,color:active?C.teal:locked?"#CBD5E1":C.textLt,fontWeight:active?700:400}}>${t.lbl}</span>
-          ${locked&&html`<div style=${{position:"absolute",top:8,right:"50%",transform:"translateX(8px)",width:14,height:14,background:"#E2E8F0",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <${Ico} name="lock" size=${8} color=${C.textLt}/>
-          </div>`}
+          ${locked&&html`<div style=${{position:"absolute",top:8,right:"50%",transform:"translateX(8px)",width:14,height:14,background:"#E2E8F0",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center"}}><${Ico} name="lock" size=${8} color=${C.textLt}/></div>`}
         </button>`;
       })}
     </nav>
 
     ${showLogin&&html`<${AdminLogin} onLogin=${doLogin} onClose=${()=>setShowLogin(false)}/>`}
-  </div>`;
-}
-
-function LockedScreen({onUnlock}){
-  return html`<div style=${{textAlign:"center",padding:"60px 20px"}}>
-    <div style=${{width:64,height:64,borderRadius:20,background:C.tealLt,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
-      <${Ico} name="lock" size=${28} color=${C.teal}/>
-    </div>
-    <div style=${{fontWeight:700,fontSize:16,color:C.textDk}}>สำหรับแอดมินเท่านั้น</div>
-    <div style=${{fontSize:13,color:C.textMd,marginTop:6,marginBottom:20}}>กรุณาเข้าสู่ระบบเพื่อดูข้อมูลส่วนนี้</div>
-    <button onClick=${onUnlock} style=${{background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 28px",fontSize:14,fontWeight:700}}>เข้าสู่ระบบแอดมิน</button>
   </div>`;
 }
 
