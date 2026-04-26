@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.2569.04.26.12.19</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.19.54</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -37,7 +37,7 @@ const MAX_SLOT    = 1;
 const SYNC_MS     = 15000;
 const TIME_SLOTS  = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
                      "13:00","13:30","14:00","14:30","15:00","15:30"];
-const MOO_NAME    = {"01":"หมู่ 1 ","02":"หมู่ 2","03":"หมู่ 3",
+const MOO_NAME    = {"01":"หมู่ 1 บ้านสะบ้าย้อย","02":"หมู่ 2","03":"หมู่ 3",
                      "04":"หมู่ 4","05":"หมู่ 5","06":"หมู่ 6",
                      "07":"หมู่ 7","08":"หมู่ 8","09":"หมู่ 9"};
 const HOLIDAYS    = new Set(["2026-01-01","2026-04-06","2026-04-13","2026-04-14","2026-04-15",
@@ -401,7 +401,8 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
               <div style=${{fontSize:11,color:C.textMd}}>${MOO_NAME[String(p.moo||"").padStart(2,"0")]||"หมู่ "+p.moo} · บ้านเลขที่ ${p.hno} · อายุ ${p.age} ปี</div>
             </div>
             ${(()=>{
-              const bkd=bookings.find(b=>(b.idcard||b["เลขบัตรประชาชน"]||"")===(p.idcard||""));
+              const _pid=String(p.idcard||"").trim();
+              const bkd=_pid?bookings.find(b=>String(b.idcard||"").trim()===_pid):null;
               if(bkd){
                 const bkId=bkd.id||bkd["id"];
                 return html`<div style=${{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
@@ -441,7 +442,8 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
         </div>`)}
       </div>
       ${(()=>{
-        const existBk=bookings.find(b=>(b.idcard||b["เลขบัตรประชาชน"]||"")===pt.idcard);
+        const ptId=String(pt.idcard||"").trim();
+        const existBk=bookings.find(b=>String(b.idcard||"").trim()===ptId && ptId!=="");
         if(existBk) return html`<div>
           <div style=${{background:"#EDE9FE",borderRadius:12,padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-start",marginBottom:10}}>
             <span style=${{fontSize:18,flexShrink:0}}>🔔</span>
@@ -808,22 +810,29 @@ function App(){
   },[]);
 
   // ---- fetch bookings only (fast, realtime) ----
+  function normaliseBooking(b){
+    // หา idcard จากทุกชื่อคอลัมน์ที่เป็นไปได้
+    const idcard = String(b.idcard||b["เลขบัตรประชาชน"]||b["เลขบัตร"]||"").trim();
+    const dateLabel = String(b._dateLabel||b["วันที่นัด"]||b["วันที่จองคิว"]||b["วันนัด"]||"").trim();
+    const time      = String(b.time||b["เวลา"]||b["เวลาที่จองคิว"]||"").trim();
+    const name      = String(b.name||b["ชื่อ-นามสกุล"]||b["ชื่อ-สกุล"]||"").trim();
+    const id        = String(b.id||b["id"]||b["เลขการจอง"]||b["รหัส"]||"").trim();
+    return {...b,
+      id, idcard, name,
+      _dateLabel: dateLabel,
+      _dk: b._dk||dateLabel,
+      _dayTh: b._dayTh||"",
+      time,
+      village: String(b.village||b["หมู่บ้าน"]||b["หมู่ที่"]||"").trim(),
+    };
+  }
+
   async function fetchBookings(silent=false){
     const url=localStorage.getItem(KEY_URL)||DEFAULT_URL;
     if(!url)return;
     try{
       const br=await jsonpGet(url,{action:"getBookings"});
-      const bks=(br.bookings||[]).map(b=>({
-        ...b,
-        // normalise field names for display
-        _dk: b["_dk"]||b["วันที่นัด"]||"",
-        _dateLabel: b["_dateLabel"]||b["วันที่นัด"]||"",
-        _dayTh: b["_dayTh"]||"",
-        time: b.time||b["เวลา"]||"",
-        idcard: b.idcard||b["เลขบัตรประชาชน"]||"",
-        name: b.name||b["ชื่อ-นามสกุล"]||"",
-        village: b.village||b["หมู่บ้าน"]||"",
-      }));
+      const bks=(br.bookings||[]).map(normaliseBooking).filter(b=>b.id&&b.id!=="undefined");
       setBookings(bks);rebuildSlots(bks);
       setLastSync(new Date().toLocaleTimeString("th-TH"));
     }catch(e){console.warn("fetchBookings error:",e.message);}
@@ -840,16 +849,7 @@ function App(){
         jsonpGet(url,{action:"getBookings"})
       ]);
       const pts=pr.patients||[];
-      const bks=(br.bookings||[]).map(b=>({
-        ...b,
-        _dk: b["_dk"]||b["วันที่นัด"]||"",
-        _dateLabel: b["_dateLabel"]||b["วันที่นัด"]||"",
-        _dayTh: b["_dayTh"]||"",
-        time: b.time||b["เวลา"]||"",
-        idcard: b.idcard||b["เลขบัตรประชาชน"]||"",
-        name: b.name||b["ชื่อ-นามสกุล"]||"",
-        village: b.village||b["หมู่บ้าน"]||"",
-      }));
+      const bks=(br.bookings||[]).map(normaliseBooking).filter(b=>b.id&&b.id!=="undefined");
       setPatients(pts);setBookings(bks);rebuildSlots(bks);
       // cache patients only (bookings always from Sheets)
       localStorage.setItem(KEY_PT,JSON.stringify(pts));
@@ -874,8 +874,8 @@ function App(){
   function rebuildSlots(list){
     const m={};
     list.forEach(bk=>{
-      const dk=bk._dk||bk["วันที่นัด"]||"";
-      const t=bk.time||bk["เวลา"]||"";
+      const dk=String(bk._dk||bk["วันที่นัด"]||bk["วันที่จองคิว"]||"").trim();
+      const t=String(bk.time||bk["เวลา"]||bk["เวลาที่จองคิว"]||"").trim();
       if(dk&&t) m[dk+"-"+t]=(m[dk+"-"+t]||0)+1;
     });
     setSlotMap(m);
