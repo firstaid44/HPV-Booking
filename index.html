@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V12.14</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V12.19</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -37,7 +37,7 @@ const MAX_SLOT    = 1;
 const SYNC_MS     = 60000;
 const TIME_SLOTS  = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
                      "13:00","13:30","14:00","14:30","15:00","15:30"];
-const MOO_NAME    = {"01":"หมู่ 1 บ้านสะบ้าย้อย","02":"หมู่ 2","03":"หมู่ 3",
+const MOO_NAME    = {"01":"หมู่ 1 ","02":"หมู่ 2","03":"หมู่ 3",
                      "04":"หมู่ 4","05":"หมู่ 5","06":"หมู่ 6",
                      "07":"หมู่ 7","08":"หมู่ 8","09":"หมู่ 9"};
 const HOLIDAYS    = new Set(["2026-01-01","2026-04-06","2026-04-13","2026-04-14","2026-04-15",
@@ -45,7 +45,8 @@ const HOLIDAYS    = new Set(["2026-01-01","2026-04-06","2026-04-13","2026-04-14"
                      "2026-07-28","2026-07-29","2026-08-12",
                      "2026-10-23","2026-12-05","2026-12-10","2026-12-31"]);
 
-const KEY_URL  = "hpv_api_url";
+const KEY_URL        = "hpv_api_url";
+const DEFAULT_URL    = "https://script.google.com/macros/s/AKfycbw2i5dSkWrGe15253A8geAaI1kfmsNWnVrlPcgONNFcIS1q0ejzVHkJ_N_hnFqAAgS-3g/exec";
 const KEY_BK   = "hpv_bookings_v4";
 const KEY_PT   = "hpv_patients_cache";
 const KEY_ADM  = "hpv_admin";
@@ -166,8 +167,9 @@ function Ico({name,size=20,color="currentColor",sw=1.8}){
    SETTINGS SCREEN (ตั้งค่า URL จาก UI)
    ============================================================ */
 function SettingsScreen({onSave}){
-  const [url,setUrl]=useState(localStorage.getItem(KEY_URL)||"");
-  const [status,setStatus]=useState(null); // null | "testing" | "ok" | "err"
+  const [url,setUrl]=useState(localStorage.getItem(KEY_URL)||DEFAULT_URL);
+  const [editing,setEditing]=useState(false);
+  const [status,setStatus]=useState(null);
   const [errMsg,setErrMsg]=useState("");
 
   async function testConn(){
@@ -201,23 +203,39 @@ function SettingsScreen({onSave}){
         </div>
       </div>
 
-      <label style=${{fontSize:12,color:C.textMd,fontWeight:600,display:"block",marginBottom:6}}>
-        Web App URL (จาก Google Apps Script)
-      </label>
-      <textarea value=${url} onChange=${e=>setUrl(e.target.value)} rows="3"
-        placeholder="https://script.google.com/macros/s/.../exec"
-        style=${{fontSize:12,fontFamily:"monospace",letterSpacing:-.3}}/>
-
-      <div style=${{display:"flex",gap:8,marginTop:10}}>
-        <button onClick=${testConn} disabled=${status==="testing"}
-          style=${{flex:1,background:C.tealLt,color:C.teal,border:"none",borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:700}}>
-          ${status==="testing"?html`<span style=${{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><div style=${{width:14,height:14,border:`2px solid ${C.teal}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 1s linear infinite"}}/> ทดสอบ...</span>`:"🔗 ทดสอบการเชื่อมต่อ"}
-        </button>
-        <button onClick=${save} disabled=${!url.trim()||status==="testing"}
-          style=${{flex:1,background:url.trim()?C.teal:"#E2E8F0",color:url.trim()?"white":C.textLt,border:"none",borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:700}}>
-          บันทึก
-        </button>
+      <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <label style=${{fontSize:12,color:C.textMd,fontWeight:600}}>Web App URL</label>
+        <span style=${{fontSize:11,background:C.tealLt,color:C.teal,padding:"2px 8px",borderRadius:6,fontWeight:600}}>✓ ฝังไว้แล้ว</span>
       </div>
+
+      ${!editing&&html`<div style=${{background:C.bg,borderRadius:10,padding:"10px 12px",display:"flex",gap:8,alignItems:"flex-start"}}>
+        <${Ico} name="link" size=${14} color=${C.teal}/>
+        <div style=${{flex:1,minWidth:0}}>
+          <div style=${{fontSize:11,fontFamily:"monospace",color:C.textMd,wordBreak:"break-all",lineHeight:1.5}}>
+            ${(localStorage.getItem(KEY_URL)||DEFAULT_URL).slice(0,60)}...
+          </div>
+        </div>
+        <button onClick=${()=>setEditing(true)} style=${{background:"white",border:`1px solid ${C.borderMd}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:C.textMd,cursor:"pointer",flexShrink:0,fontWeight:600}}>
+          ✏️ แก้ไข
+        </button>
+      </div>`}
+
+      ${editing&&html`<div>
+        <textarea value=${url} onChange=${e=>setUrl(e.target.value)} rows="3"
+          placeholder="https://script.google.com/macros/s/.../exec"
+          style=${{fontSize:12,fontFamily:"monospace",letterSpacing:-.3}}/>
+        <div style=${{display:"flex",gap:8,marginTop:8}}>
+          <button onClick=${()=>setEditing(false)} style=${{flex:1,background:"#F1F5F9",border:"none",borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:600,color:C.textMd}}>ยกเลิก</button>
+          <button onClick=${testConn} disabled=${status==="testing"}
+            style=${{flex:1,background:C.tealLt,color:C.teal,border:"none",borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:700}}>
+            ${status==="testing"?html`<span style=${{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><div style=${{width:14,height:14,border:`2px solid ${C.teal}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 1s linear infinite"}}/> ทดสอบ...</span>`:"🔗 ทดสอบ"}
+          </button>
+          <button onClick=${save} disabled=${!url.trim()||status==="testing"}
+            style=${{flex:1,background:url.trim()?C.teal:"#E2E8F0",color:url.trim()?"white":C.textLt,border:"none",borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:700}}>
+            บันทึก
+          </button>
+        </div>
+      </div>`}
 
       ${status==="ok"&&html`<div style=${{marginTop:10,background:C.greenLt,borderRadius:10,padding:"10px 12px",display:"flex",gap:8,alignItems:"center"}}>
         <${Ico} name="check" size=${16} color=${C.green}/>
@@ -356,12 +374,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       </div>
     </div>`}
     <${StepBar}/>
-    ${!apiUrl&&html`<div style=${{...card,background:C.amberLt,border:`1px solid ${C.amber}33`}}>
-      <div style=${{display:"flex",gap:10,alignItems:"flex-start"}}>
-        <${Ico} name="info" size=${18} color=${C.amber}/>
-        <div style=${{fontSize:13,color:C.amber}}>ยังไม่ได้เชื่อมต่อ Google Sheets · ไปที่ <strong>แอดมิน → ตั้งค่า</strong> เพื่อเชื่อมต่อ</div>
-      </div>
-    </div>`}
+
     ${step===1&&html`<div style=${card}>
       <div style=${{fontWeight:700,fontSize:16,color:C.textDk,marginBottom:14}}>ค้นหาผู้รับบริการ</div>
       ${patients.length===0&&html`<div style=${{textAlign:"center",padding:"10px 0 14px",color:C.textLt,fontSize:12}}>⏳ ยังไม่มีข้อมูล ${apiUrl?"กำลังโหลด...":"กรุณาเชื่อมต่อ Sheets ก่อน"}</div>`}
@@ -774,7 +787,7 @@ function StatsTab({patients,bookings,onRefresh,lastSync}){
    MAIN APP
    ============================================================ */
 function App(){
-  const [apiUrl,setApiUrl] = useState(localStorage.getItem(KEY_URL)||"");
+  const [apiUrl,setApiUrl] = useState(localStorage.getItem(KEY_URL)||DEFAULT_URL);
   const [patients,setPatients] = useState([]);
   const [bookings,setBookings] = useState([]);
   const [slotMap,setSlotMap]   = useState({});
@@ -788,6 +801,8 @@ function App(){
     try{const r=localStorage.getItem(KEY_ADM);if(r){const{expiry}=JSON.parse(r);if(Date.now()<expiry)setIsAdmin(true);else localStorage.removeItem(KEY_ADM);}}catch{}
     try{const cb=localStorage.getItem(KEY_BK);if(cb){const b=JSON.parse(cb);setBookings(b);rebuildSlots(b);}}catch{}
     try{const cp=localStorage.getItem(KEY_PT);if(cp)setPatients(JSON.parse(cp));}catch{}
+    // ฝัง URL เริ่มต้น
+    if(!localStorage.getItem(KEY_URL)) localStorage.setItem(KEY_URL,DEFAULT_URL);
   },[]);
 
   async function fetchAll(silent=false){
