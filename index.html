@@ -285,11 +285,12 @@ function AdminLogin({onLogin,onClose}){
 /* ============================================================
    BOOKING TAB
    ============================================================ */
-function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
+function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull,onDone}){
   const [step,setStep]=useState(1); const [sid,setSid]=useState(""); const [snm,setSnm]=useState("");
   const [res,setRes]=useState([]); const [pt,setPt]=useState(null); const [el,setEl]=useState(null);
   const [selD,setSelD]=useState(null); const [selT,setSelT]=useState(""); const [note,setNote]=useState("");
   const [conf,setConf]=useState(null); const [syncSt,setSyncSt]=useState(null);
+  const [showConfirm,setShowConfirm]=useState(false);
 
   function doSearch(){
     if(!sid.trim()&&!snm.trim())return;
@@ -314,7 +315,8 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
       onAddBooking({...bk,synced:true,targetOk},true);
     }catch(e){setSyncSt("err");}
   }
-  function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);}
+  function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);setShowConfirm(false);}
+  function resetAndGoHome(){reset();if(onDone)onDone();}
   const sc=t=>slotCount(selD?dKey(selD):"",t);
   const sf=t=>slotFull(selD?dKey(selD):"",t,MAX_SLOT);
   const StepBar=()=>html`<div style=${{display:"flex",alignItems:"center",marginBottom:16}}>
@@ -329,6 +331,30 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
     })}
   </div>`;
   return html`<div class="fade">
+    ${showConfirm&&html`<div style=${{position:"fixed",inset:0,zIndex:150,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style=${{background:"white",borderRadius:20,padding:"24px 20px",maxWidth:360,width:"100%",animation:"popIn .2s ease"}}>
+        <div style=${{width:52,height:52,borderRadius:16,background:C.tealLt,margin:"0 auto 14px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>📋</div>
+        <div style=${{fontWeight:700,fontSize:16,color:C.textDk,textAlign:"center",marginBottom:6}}>ยืนยันการจองคิว?</div>
+        <div style=${{fontSize:13,color:C.textMd,textAlign:"center",marginBottom:14,lineHeight:1.7}}>
+          กำลังจะนัดหมายสำหรับ<br/>
+          <strong style=${{color:C.textDk}}>${pt?`${pt.titlename||""} ${pt.fname||""} ${pt.lname||""}`.trim():""}</strong>
+        </div>
+        <div style=${{background:C.bg,borderRadius:12,padding:"12px 14px",marginBottom:16,fontSize:13,color:C.textMd,lineHeight:1.8}}>
+          📍 ${pt?MOO_NAME[String(pt.moo||"").padStart(2,"0")]||pt.moo:""} บ้านเลขที่ ${pt?.hno||""}<br/>
+          🔬 HPV Self-test (คัดกรองมะเร็งปากมดลูก)<br/>
+          🗓 บริการเฉพาะวันจันทร์ และ วันศุกร์<br/>
+          📌 สูงสุด ${MAX_SLOT} คิวต่อช่วงเวลา
+        </div>
+        <div style=${{background:C.amberLt,borderRadius:10,padding:"9px 12px",marginBottom:16,fontSize:12,color:C.amber,display:"flex",gap:8,alignItems:"flex-start"}}>
+          <span style=${{flexShrink:0}}>⚠️</span>
+          <span>กรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ หากต้องการแก้ไขกด "ยกเลิก"</span>
+        </div>
+        <div style=${{display:"flex",gap:8}}>
+          <button onClick=${()=>setShowConfirm(false)} style=${{flex:1,background:"#F1F5F9",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:600,color:C.textMd}}>ยกเลิก</button>
+          <button onClick=${()=>{setShowConfirm(false);setStep(3);setSelD(null);setSelT("");}} style=${{flex:2,background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>ดำเนินการต่อ →</button>
+        </div>
+      </div>
+    </div>`}
     <${StepBar}/>
     ${!apiUrl&&html`<div style=${{...card,background:C.amberLt,border:`1px solid ${C.amber}33`}}>
       <div style=${{display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -359,7 +385,11 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
               <div style=${{fontSize:13,fontWeight:700,color:C.textDk,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${p.titlename||""} ${p.fname} ${p.lname}</div>
               <div style=${{fontSize:11,color:C.textMd}}>${MOO_NAME[String(p.moo||"").padStart(2,"0")]||"หมู่ "+p.moo} · บ้านเลขที่ ${p.hno} · อายุ ${p.age} ปี</div>
             </div>
-            <span style=${{fontSize:10,padding:"3px 8px",borderRadius:8,flexShrink:0,background:eb(e),color:ec(e),fontWeight:700}}>${e.ok?"มีสิทธิ์":e.col==="amber"?"ยังไม่ถึงกำหนด":"ไม่อยู่เกณฑ์"}</span>
+            ${(()=>{
+              const bkd=bookings.find(b=>(b.idcard||b["เลขบัตรประชาชน"]||"")===(p.idcard||""));
+              if(bkd) return html`<span style=${{fontSize:10,padding:"3px 8px",borderRadius:8,flexShrink:0,background:"#EDE9FE",color:"#7C3AED",fontWeight:700,textAlign:"right",lineHeight:1.4}}>จองคิวแล้ว<br/>${bkd._dateLabel||bkd["วันที่นัด"]||""} ${bkd.time||bkd["เวลา"]||""}</span>`;
+              return html`<span style=${{fontSize:10,padding:"3px 8px",borderRadius:8,flexShrink:0,background:eb(e),color:ec(e),fontWeight:700}}>${e.ok?"มีสิทธิ์":e.col==="amber"?"ยังไม่ถึงกำหนด":"ไม่อยู่เกณฑ์"}</span>`;
+            })()}
           </div>`;
           })}
         </div>
@@ -391,7 +421,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
       </div>
       <div style=${{display:"flex",gap:8}}>
         <button onClick=${reset} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
-        ${el.ok?html`<button onClick=${()=>{setStep(3);setSelD(null);setSelT("");}} style=${{flex:2,background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>จองคิวตรวจ HPV</button>`:
+        ${el.ok?html`<button onClick=${()=>setShowConfirm(true)} style=${{flex:2,background:C.teal,color:"white",border:"none",borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:700}}>จองคิวตรวจ HPV</button>`:
                  html`<button disabled style=${{flex:2,background:C.bg,color:C.textLt,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14}}>ไม่สามารถจองได้</button>`}
       </div>
     </div>`}
@@ -462,7 +492,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
         <${Ico} name="info" size=${16} color=${C.teal}/>
         <div style=${{fontSize:12,color:C.tealDk,lineHeight:1.6}}>นำบัตรประชาชนมาด้วย · หลีกเลี่ยงการสวนล้างช่องคลอดและมีเพศสัมพันธ์ก่อนตรวจ 48 ชั่วโมง</div>
       </div>
-      <button onClick=${reset} style=${{width:"100%",background:C.teal,color:"white",border:"none",borderRadius:14,padding:"13px 0",fontSize:15,fontWeight:700}}>จองคิวรายใหม่</button>
+      <button onClick=${resetAndGoHome} style=${{width:"100%",background:C.teal,color:"white",border:"none",borderRadius:14,padding:"13px 0",fontSize:15,fontWeight:700}}>จองคิวรายใหม่</button>
     </div>`}
   </div>`;
 }
@@ -789,7 +819,7 @@ function App(){
 
     <!-- CONTENT -->
     <div style=${{padding:"14px 14px 80px"}}>
-      ${tab==="book"  && html`<${BookingTab} apiUrl=${apiUrl} patients=${patients} bookings=${bookings} onAddBooking=${onAddBooking} slotCount=${slotCount} slotFull=${slotFull}/>`}
+      ${tab==="book"  && html`<${BookingTab} apiUrl=${apiUrl} patients=${patients} bookings=${bookings} onAddBooking=${onAddBooking} slotCount=${slotCount} slotFull=${slotFull} onDone=${()=>setTab("book")}/>`}
       ${tab==="list"  && (isAdmin?html`<${ListTab} bookings=${bookings} onDelete=${onDeleteBooking} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
       ${tab==="stats" && (isAdmin?html`<${StatsTab} patients=${patients} bookings=${bookings} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
       ${tab==="setup" && (isAdmin?html`<${SettingsScreen} onSave=${onSaveUrl}/>`:html`<${LockedScreen}/>`)}
