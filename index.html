@@ -307,8 +307,12 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
       hno:pt.hno,age:pt.age,date:fmtBEFull(selD),time:selT,note,
       _dk:dKey(selD),_dateLabel:fmtBEFull(selD),_dayTh:DAY_TH[selD.getDay()],synced:false};
     onAddBooking(bk);setConf(bk);setStep(4);setSyncSt("ing");window.scrollTo(0,0);
-    try{await apiPost(apiUrl,bk);setSyncSt("ok");onAddBooking({...bk,synced:true},true);}
-    catch(e){setSyncSt("err");}
+    try{
+      const r=await apiPost(apiUrl,bk);
+      const targetOk=r.targetUpdate&&r.targetUpdate.ok;
+      setSyncSt("ok");
+      onAddBooking({...bk,synced:true,targetOk},true);
+    }catch(e){setSyncSt("err");}
   }
   function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);}
   const sc=t=>slotCount(selD?dKey(selD):"",t);
@@ -467,14 +471,29 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,slotCount,slotFull}){
    LIST TAB
    ============================================================ */
 function ListTab({bookings,onDelete,onRefresh,lastSync}){
-  const [delId,setDelId]=useState(null); const [doing,setDoing]=useState(false);
+  const [delId,setDelId]=useState(null);
+  const [doing,setDoing]=useState(false);
+  const [view,setView]=useState("summary");
   const apiUrl=localStorage.getItem(KEY_URL)||"";
+
   async function confirmDel(id){
     setDoing(true);
     try{if(apiUrl)await apiPost(apiUrl,{action:"deleteBooking",id});onDelete(id);}
     catch(e){alert("เกิดข้อผิดพลาด: "+e.message);}
     setDoing(false);setDelId(null);
   }
+
+  const byDate=useMemo(()=>{
+    const m={};
+    [...bookings].forEach(bk=>{
+      const d=bk._dateLabel||bk["วันที่นัด"]||"ไม่ระบุวัน";
+      const dk=bk._dk||bk["วันที่นัด"]||d;
+      if(!m[dk])m[dk]={label:d,dk,items:[]};
+      m[dk].items.push(bk);
+    });
+    return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])).map(([,v])=>v);
+  },[bookings]);
+
   return html`<div class="fade">
     <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div style=${{fontWeight:700,fontSize:16,color:C.textDk}}>รายการจองคิว (${bookings.length} ราย)</div>
@@ -485,8 +504,57 @@ function ListTab({bookings,onDelete,onRefresh,lastSync}){
         </button>
       </div>
     </div>
-    ${bookings.length===0?html`<div style=${{...card,textAlign:"center",padding:"40px 0",color:C.textLt}}><${Ico} name="calendar" size=${36} color=${C.border}/><div style=${{marginTop:10,fontSize:14}}>ยังไม่มีรายการจอง</div></div>`:""}
-    <div style=${{display:"flex",flexDirection:"column",gap:8}}>
+    <div style=${{display:"flex",gap:6,marginBottom:12}}>
+      ${["summary","all"].map(v=>html`<button key=${v} onClick=${()=>setView(v)}
+        style=${{flex:1,background:view===v?C.teal:"white",color:view===v?"white":C.textMd,
+          border:`1.5px solid ${view===v?C.teal:C.border}`,borderRadius:10,padding:"8px 0",fontSize:13,fontWeight:600}}>
+        ${v==="summary"?"📅 สรุปรายวัน":"📋 รายชื่อทั้งหมด"}
+      </button>`)}
+    </div>
+
+    ${view==="summary"&&html`<div>
+      ${bookings.length===0?html`<div style=${{...card,textAlign:"center",padding:"40px 0",color:C.textLt}}><${Ico} name="calendar" size=${36} color=${C.border}/><div style=${{marginTop:10,fontSize:14}}>ยังไม่มีรายการจอง</div></div>`:""}
+      ${byDate.map(group=>html`
+        <div key=${group.dk} style=${card}>
+          <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${C.border}`}}>
+            <div>
+              <div style=${{fontWeight:700,fontSize:14,color:C.textDk}}>${group.label}</div>
+              <div style=${{fontSize:11,color:C.textMd,marginTop:2}}>${group.items.length} คิว</div>
+            </div>
+            <div style=${{background:C.tealLt,borderRadius:10,padding:"4px 12px",textAlign:"center"}}>
+              <div style=${{fontSize:10,color:C.teal}}>จองแล้ว</div>
+              <div style=${{fontSize:20,fontWeight:700,color:C.teal}}>${group.items.length}</div>
+            </div>
+          </div>
+          <div style=${{display:"flex",flexDirection:"column",gap:6}}>
+            ${group.items.sort((a,b)=>(a.time||a["เวลา"]||"").localeCompare(b.time||b["เวลา"]||"")).map((bk,i)=>{
+              const id=bk.id||bk["id"];
+              const t=bk.time||bk["เวลา"]||"";
+              const nm=bk.name||bk["ชื่อ-นามสกุล"]||"";
+              const vg=bk.village||bk["หมู่บ้าน"]||"";
+              return html`<div key=${id} style=${{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:C.bg,borderRadius:10}}>
+                <div style=${{width:52,height:48,borderRadius:10,background:C.tealLt,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style=${{fontSize:9,color:C.teal,fontWeight:600}}>เวลา</span>
+                  <span style=${{fontSize:13,fontWeight:700,color:C.teal}}>${t}</span>
+                </div>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontWeight:700,fontSize:13,color:C.textDk,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${nm}</div>
+                  <div style=${{fontSize:11,color:C.textMd}}>${vg}</div>
+                  <div style=${{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
+                    ${(bk.synced||bk._synced)&&html`<span style=${{fontSize:10,padding:"1px 6px",borderRadius:6,background:C.greenLt,color:C.green,fontWeight:700}}>✓ Sheets</span>`}
+                    ${bk.targetOk&&html`<span style=${{fontSize:10,padding:"1px 6px",borderRadius:6,background:"#EDE9FE",color:"#7C3AED",fontWeight:700}}>✓ คอล.P</span>`}
+                  </div>
+                </div>
+                <button onClick=${()=>setDelId(id)} style=${{background:C.redLt,color:C.red,border:"none",borderRadius:8,padding:"4px 8px",fontSize:10,fontWeight:700,flexShrink:0}}>ยกเลิก</button>
+              </div>`;
+            })}
+          </div>
+        </div>
+      `)}
+    </div>`}
+
+    ${view==="all"&&html`<div style=${{display:"flex",flexDirection:"column",gap:8}}>
+      ${bookings.length===0?html`<div style=${{...card,textAlign:"center",padding:"40px 0",color:C.textLt}}><${Ico} name="calendar" size=${36} color=${C.border}/><div style=${{marginTop:10,fontSize:14}}>ยังไม่มีรายการจอง</div></div>`:""}
       ${[...bookings].reverse().map(bk=>{const id=bk.id||bk["id"];return html`
         <div key=${id} style=${{...card,marginBottom:0}}>
           <div style=${{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -499,15 +567,16 @@ function ListTab({bookings,onDelete,onRefresh,lastSync}){
           <div style=${{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
             <span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.tealLt,color:C.teal,fontWeight:700}}>${bk._dateLabel||bk["วันที่นัด"]||""} · ${bk.time||bk["เวลา"]||""} น.</span>
             <span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.bg,color:C.textMd}}>HPV Self-test</span>
-            ${bk.synced&&html`<span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.greenLt,color:C.green,fontWeight:700}}>✓ Sheets</span>`}
+            ${(bk.synced||bk._synced)&&html`<span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:C.greenLt,color:C.green,fontWeight:700}}>✓ Sheets</span>`}
+            ${bk.targetOk&&html`<span style=${{fontSize:11,padding:"3px 8px",borderRadius:8,background:"#EDE9FE",color:"#7C3AED",fontWeight:700}}>✓ คอล.P เป้าหมาย</span>`}
           </div>
-        </div>`;
-      })}
-    </div>
+        </div>`;})}
+    </div>`}
+
     ${delId&&html`<div style=${{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style=${{background:"white",borderRadius:20,padding:24,maxWidth:320,width:"100%"}}>
         <div style=${{fontWeight:700,fontSize:16,color:C.textDk,marginBottom:8}}>ยืนยันการยกเลิก?</div>
-        <div style=${{fontSize:13,color:C.textMd,marginBottom:16}}>รายการนี้จะถูกยกเลิกทั้งในแอปและ Google Sheets</div>
+        <div style=${{fontSize:13,color:C.textMd,marginBottom:16}}>รายการนี้จะถูกยกเลิกทั้งในแอปและ Google Sheets และล้างข้อมูลในคอลัมน์ P ของชีตเป้าหมาย</div>
         <div style=${{display:"flex",gap:8}}>
           <button onClick=${()=>setDelId(null)} style=${{flex:1,background:"#F1F5F9",border:"none",borderRadius:10,padding:"10px 0",fontSize:14,fontWeight:600}}>ยกเลิก</button>
           <button onClick=${()=>confirmDel(delId)} disabled=${doing} style=${{flex:1,background:C.red,color:"white",border:"none",borderRadius:10,padding:"10px 0",fontSize:14,fontWeight:700}}>${doing?"กำลังลบ...":"ยืนยัน"}</button>
@@ -523,6 +592,18 @@ function ListTab({bookings,onDelete,onRefresh,lastSync}){
 function StatsTab({patients,bookings,onRefresh,lastSync}){
   const screened=useMemo(()=>patients.filter(p=>(p["วันคัดกรอง"]||"").trim()).length,[patients]);
   const pct=patients.length?Math.round(screened/patients.length*100):0;
+  const byDate=useMemo(()=>{
+    const m={};
+    bookings.forEach(bk=>{
+      const d=bk._dateLabel||bk["วันที่นัด"]||"ไม่ระบุวัน";
+      const dk=bk._dk||d;
+      if(!m[dk])m[dk]={label:d,dk,count:0,slots:{}};
+      m[dk].count++;
+      const t=bk.time||bk["เวลา"]||"";
+      m[dk].slots[t]=(m[dk].slots[t]||0)+1;
+    });
+    return Object.values(m).sort((a,b)=>a.dk.localeCompare(b.dk));
+  },[bookings]);
   return html`<div class="fade">
     <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div style=${{fontWeight:700,fontSize:16,color:C.textDk}}>สถิติการคัดกรอง</div>
@@ -531,25 +612,48 @@ function StatsTab({patients,bookings,onRefresh,lastSync}){
       </button>
     </div>
     ${lastSync&&html`<div style=${{fontSize:11,color:C.textLt,marginBottom:8,textAlign:"right"}}>อัปเดตล่าสุด: ${lastSync}</div>`}
+    <div style=${{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+      ${[{lbl:"เป้าหมายทั้งหมด",val:patients.length,col:C.textDk,bg:"white"},
+         {lbl:"ตรวจแล้ว",val:screened,col:C.teal,bg:C.tealLt},
+         {lbl:"ยังไม่ตรวจ",val:patients.length-screened,col:C.amber,bg:C.amberLt},
+         {lbl:"จองคิวแล้ว",val:bookings.length,col:"#7C3AED",bg:"#EDE9FE"}]
+        .map(c=>html`<div key=${c.lbl} style=${{background:c.bg,borderRadius:14,padding:"12px 14px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+          <div style=${{fontSize:11,color:c.col,fontWeight:600,opacity:.8}}>${c.lbl}</div>
+          <div style=${{fontSize:32,fontWeight:700,color:c.col,lineHeight:1.1}}>${c.val}</div>
+        </div>`)}
+    </div>
     <div style=${card}>
-      <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:14}}>ภาพรวม</div>
-      <div style=${{marginBottom:14}}>
-        <div style=${{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-          <span style=${{fontSize:13,color:C.textMd}}>ตรวจแล้ว</span>
-          <span style=${{fontSize:13,fontWeight:700,color:C.teal}}>${screened}/${patients.length} (${pct}%)</span>
-        </div>
-        <div style=${{height:12,background:C.bg,borderRadius:6,overflow:"hidden"}}>
-          <div style=${{height:"100%",width:pct+"%",background:`linear-gradient(90deg,${C.teal},${C.tealMd})`,borderRadius:6}}/>
-        </div>
+      <div style=${{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+        <span style=${{fontSize:13,color:C.textMd,fontWeight:600}}>ความคืบหน้าการตรวจ</span>
+        <span style=${{fontSize:13,fontWeight:700,color:C.teal}}>${pct}%</span>
       </div>
-      <div style=${{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-        ${[{lbl:"เป้าหมาย",val:patients.length,col:C.textDk},{lbl:"ตรวจแล้ว",val:screened,col:C.teal},{lbl:"คงเหลือ",val:patients.length-screened,col:C.amber}]
-          .map(c=>html`<div key=${c.lbl} style=${{background:C.bg,borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-            <div style=${{fontSize:10,color:C.textLt,fontWeight:600}}>${c.lbl}</div>
-            <div style=${{fontSize:26,fontWeight:700,color:c.col}}>${c.val}</div>
-          </div>`)}
+      <div style=${{height:14,background:C.bg,borderRadius:7,overflow:"hidden",marginBottom:8}}>
+        <div style=${{height:"100%",width:pct+"%",background:`linear-gradient(90deg,${C.teal},${C.tealMd})`,borderRadius:7}}/>
+      </div>
+      <div style=${{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textLt}}>
+        <span>ตรวจแล้ว ${screened} ราย</span><span>คงเหลือ ${patients.length-screened} ราย</span>
       </div>
     </div>
+    ${bookings.length>0&&html`<div style=${card}>
+      <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+        📅 สรุปการจองคิวรายวัน
+        <span style=${{fontSize:12,background:"#EDE9FE",color:"#7C3AED",padding:"2px 8px",borderRadius:8,fontWeight:600}}>${bookings.length} ราย</span>
+      </div>
+      ${byDate.map(g=>html`<div key=${g.dk} style=${{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
+        <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style=${{fontWeight:700,fontSize:13,color:C.textDk}}>${g.label}</div>
+          <span style=${{background:C.tealLt,color:C.teal,fontSize:11,padding:"2px 10px",borderRadius:8,fontWeight:700}}>${g.count} คิว</span>
+        </div>
+        <div style=${{display:"flex",gap:6,flexWrap:"wrap"}}>
+          ${Object.entries(g.slots).sort((a,b)=>a[0].localeCompare(b[0])).map(([t,n])=>html`
+            <div key=${t} style=${{background:C.bg,borderRadius:8,padding:"4px 10px",textAlign:"center",minWidth:64}}>
+              <div style=${{fontSize:12,fontWeight:700,color:C.teal}}>${t}</div>
+              <div style=${{fontSize:10,color:C.textMd}}>${n}/${MAX_SLOT} คน</div>
+              <div style=${{height:3,background:C.tealLt,borderRadius:2,marginTop:3,overflow:"hidden"}}><div style=${{height:"100%",width:(n/MAX_SLOT*100)+"%",background:C.teal,borderRadius:2}}/></div>
+            </div>`)}
+        </div>
+      </div>`)}
+    </div>`}
     <div style=${card}>
       <div style=${{fontWeight:700,fontSize:14,color:C.textDk,marginBottom:14}}>รายหมู่บ้าน</div>
       ${Object.entries(MOO_NAME).map(([moo,name])=>{
@@ -557,10 +661,12 @@ function StatsTab({patients,bookings,onRefresh,lastSync}){
         const done=all.filter(p=>(p["วันคัดกรอง"]||"").trim());
         const p2=all.length?Math.round(done.length/all.length*100):0;
         const nd=all.length-done.length;
+        const booked=bookings.filter(b=>(b.village||b["หมู่บ้าน"]||"").includes(name.split(" ")[0])||false);
         return html`<div key=${moo} style=${{marginBottom:14}}>
           <div style=${{display:"flex",justifyContent:"space-between",marginBottom:5,alignItems:"center"}}>
             <div style=${{fontSize:13,fontWeight:600,color:C.textDk}}>${name}</div>
             <div style=${{display:"flex",gap:6,alignItems:"center"}}>
+              ${booked.length>0&&html`<span style=${{fontSize:10,padding:"2px 6px",borderRadius:6,background:"#EDE9FE",color:"#7C3AED",fontWeight:700}}>จอง ${booked.length}</span>`}
               <span style=${{fontSize:11,color:C.textMd}}>${done.length}/${all.length}</span>
               <span style=${{fontSize:10,padding:"2px 7px",borderRadius:8,background:nd>0?C.amberLt:C.greenLt,color:nd>0?C.amber:C.green,fontWeight:700}}>${nd>0?"รอ "+nd:"ครบ ✓"}</span>
             </div>
