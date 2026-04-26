@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V12.19</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.2569.04.26.12.19</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -34,7 +34,7 @@ button{cursor:pointer}
 const ADMIN_PIN   = "1234";
 const CENTER_NAME = "ศูนย์สุขภาพชุมชนสะบ้าย้อย";
 const MAX_SLOT    = 1;
-const SYNC_MS     = 60000;
+const SYNC_MS     = 15000;
 const TIME_SLOTS  = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
                      "13:00","13:30","14:00","14:30","15:00","15:30"];
 const MOO_NAME    = {"01":"หมู่ 1 ","02":"หมู่ 2","03":"หมู่ 3",
@@ -303,15 +303,17 @@ function AdminLogin({onLogin,onClose}){
 /* ============================================================
    BOOKING TAB
    ============================================================ */
-function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotCount,slotFull,onDone}){
+function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotCount,slotFull,onDone,onRefreshBookings}){
   const [step,setStep]=useState(1); const [sid,setSid]=useState(""); const [snm,setSnm]=useState("");
   const [res,setRes]=useState([]); const [pt,setPt]=useState(null); const [el,setEl]=useState(null);
   const [selD,setSelD]=useState(null); const [selT,setSelT]=useState(""); const [note,setNote]=useState("");
   const [conf,setConf]=useState(null); const [syncSt,setSyncSt]=useState(null);
   const [showConfirm,setShowConfirm]=useState(false);
 
-  function doSearch(){
+  async function doSearch(){
     if(!sid.trim()&&!snm.trim())return;
+    // fetch latest bookings from Sheets before showing results
+    if(onRefreshBookings) await onRefreshBookings(true);
     let r=patients;
     if(sid.trim()) r=r.filter(p=>String(p.idcard||"").includes(sid.trim()));
     if(snm.trim()){const q=snm.trim().toLowerCase();r=r.filter(p=>(p.fname||"").toLowerCase().includes(q)||(p.lname||"").toLowerCase().includes(q));}
@@ -799,49 +801,112 @@ function App(){
 
   useEffect(()=>{
     try{const r=localStorage.getItem(KEY_ADM);if(r){const{expiry}=JSON.parse(r);if(Date.now()<expiry)setIsAdmin(true);else localStorage.removeItem(KEY_ADM);}}catch{}
-    try{const cb=localStorage.getItem(KEY_BK);if(cb){const b=JSON.parse(cb);setBookings(b);rebuildSlots(b);}}catch{}
+    // bookings always fetched from Sheets (not localStorage)
     try{const cp=localStorage.getItem(KEY_PT);if(cp)setPatients(JSON.parse(cp));}catch{}
     // ฝัง URL เริ่มต้น
     if(!localStorage.getItem(KEY_URL)) localStorage.setItem(KEY_URL,DEFAULT_URL);
   },[]);
 
+  // ---- fetch bookings only (fast, realtime) ----
+  async function fetchBookings(silent=false){
+    const url=localStorage.getItem(KEY_URL)||DEFAULT_URL;
+    if(!url)return;
+    try{
+      const br=await jsonpGet(url,{action:"getBookings"});
+      const bks=(br.bookings||[]).map(b=>({
+        ...b,
+        // normalise field names for display
+        _dk: b["_dk"]||b["วันที่นัด"]||"",
+        _dateLabel: b["_dateLabel"]||b["วันที่นัด"]||"",
+        _dayTh: b["_dayTh"]||"",
+        time: b.time||b["เวลา"]||"",
+        idcard: b.idcard||b["เลขบัตรประชาชน"]||"",
+        name: b.name||b["ชื่อ-นามสกุล"]||"",
+        village: b.village||b["หมู่บ้าน"]||"",
+      }));
+      setBookings(bks);rebuildSlots(bks);
+      setLastSync(new Date().toLocaleTimeString("th-TH"));
+    }catch(e){console.warn("fetchBookings error:",e.message);}
+  }
+
+  // ---- fetch patients + bookings (full) ----
   async function fetchAll(silent=false){
-    const url=localStorage.getItem(KEY_URL)||"";
+    const url=localStorage.getItem(KEY_URL)||DEFAULT_URL;
     if(!url)return;
     if(!silent)setLoading(true);
     try{
-      const [pr,br]=await Promise.all([jsonpGet(url,{action:"getPatients"}),jsonpGet(url,{action:"getBookings"})]);
+      const [pr,br]=await Promise.all([
+        jsonpGet(url,{action:"getPatients"}),
+        jsonpGet(url,{action:"getBookings"})
+      ]);
       const pts=pr.patients||[];
-      const sheetBks=br.bookings||[];
-      setPatients(pts);
-      const sheetIds=new Set(sheetBks.map(b=>String(b.id||b["id"])));
-      const local=(JSON.parse(localStorage.getItem(KEY_BK)||"[]")).filter(b=>!sheetIds.has(String(b.id)));
-      const merged=[...sheetBks,...local];
-      setBookings(merged);rebuildSlots(merged);
+      const bks=(br.bookings||[]).map(b=>({
+        ...b,
+        _dk: b["_dk"]||b["วันที่นัด"]||"",
+        _dateLabel: b["_dateLabel"]||b["วันที่นัด"]||"",
+        _dayTh: b["_dayTh"]||"",
+        time: b.time||b["เวลา"]||"",
+        idcard: b.idcard||b["เลขบัตรประชาชน"]||"",
+        name: b.name||b["ชื่อ-นามสกุล"]||"",
+        village: b.village||b["หมู่บ้าน"]||"",
+      }));
+      setPatients(pts);setBookings(bks);rebuildSlots(bks);
+      // cache patients only (bookings always from Sheets)
       localStorage.setItem(KEY_PT,JSON.stringify(pts));
-      localStorage.setItem(KEY_BK,JSON.stringify(merged));
       setLastSync(new Date().toLocaleTimeString("th-TH"));
-    }catch(e){console.warn("Sync error:",e.message);}
+    }catch(e){
+      console.warn("fetchAll error:",e.message);
+      // load patient cache on fail
+      try{const cp=localStorage.getItem(KEY_PT);if(cp)setPatients(JSON.parse(cp));}catch{}
+    }
     setLoading(false);
   }
 
+  // initial load
   useEffect(()=>{if(apiUrl)fetchAll();},[apiUrl]);
-  useEffect(()=>{if(!apiUrl)return;const t=setInterval(()=>fetchAll(true),SYNC_MS);return()=>clearInterval(t);},[apiUrl]);
+  // auto-refresh bookings every 15s
+  useEffect(()=>{
+    if(!apiUrl)return;
+    const t=setInterval(()=>fetchBookings(true),SYNC_MS);
+    return()=>clearInterval(t);
+  },[apiUrl]);
 
-  function rebuildSlots(list){const m={};list.forEach(bk=>{const k=(bk._dk||"")+"-"+(bk.time||bk["เวลา"]||"");m[k]=(m[k]||0)+1;});setSlotMap(m);}
+  function rebuildSlots(list){
+    const m={};
+    list.forEach(bk=>{
+      const dk=bk._dk||bk["วันที่นัด"]||"";
+      const t=bk.time||bk["เวลา"]||"";
+      if(dk&&t) m[dk+"-"+t]=(m[dk+"-"+t]||0)+1;
+    });
+    setSlotMap(m);
+  }
   function slotCount(dk,t){return slotMap[dk+"-"+t]||0;}
   function slotFull(dk,t,max){return slotCount(dk,t)>=max;}
+
+  // Optimistic add: show immediately, then Sheets becomes source of truth on next sync
   function onAddBooking(bk,update=false){
-    setBookings(prev=>{const u=update?prev.map(b=>b.id===bk.id?{...b,synced:true}:b):[...prev,bk];localStorage.setItem(KEY_BK,JSON.stringify(u));rebuildSlots(u);return u;});
+    setBookings(prev=>{
+      const u=update?prev.map(b=>b.id===bk.id?{...b,synced:true,targetOk:bk.targetOk}:b):[...prev,bk];
+      rebuildSlots(u);return u;
+    });
   }
+  // Optimistic delete: remove locally, Sheets updated by API call
   function onDeleteBooking(id){
-    setBookings(prev=>{const u=prev.filter(b=>String(b.id)!==String(id)&&String(b["id"])!==String(id));localStorage.setItem(KEY_BK,JSON.stringify(u));rebuildSlots(u);return u;});
+    setBookings(prev=>{const u=prev.filter(b=>String(b.id)!==String(id)&&String(b["id"])!==String(id));rebuildSlots(u);return u;});
+    // re-fetch after short delay to confirm
+    setTimeout(()=>fetchBookings(true),2000);
   }
   function doLogin(pin){if(pin===ADMIN_PIN){localStorage.setItem(KEY_ADM,JSON.stringify({expiry:Date.now()+SESSION_H*3600*1000}));setIsAdmin(true);setShowLogin(false);return true;}return false;}
   function doLogout(){localStorage.removeItem(KEY_ADM);setIsAdmin(false);}
   function onSaveUrl(u){setApiUrl(u);}
 
   const screened=useMemo(()=>patients.filter(p=>(p["วันคัดกรอง"]||"").trim()).length,[patients]);
+  // fetch fresh bookings when switching to admin tabs
+  function handleTabSwitch(id){
+    setTab(id);
+    if(id==="list"||id==="stats") fetchBookings(true);
+  }
+
   const TABS=[
     {id:"book",  icon:"calendar", lbl:"จองคิว",  admin:false},
     {id:"list",  icon:"list",     lbl:"รายการ",  admin:true},
@@ -896,7 +961,7 @@ function App(){
 
     <!-- CONTENT -->
     <div style=${{padding:"14px 14px 80px"}}>
-      ${tab==="book"  && html`<${BookingTab} apiUrl=${apiUrl} patients=${patients} bookings=${bookings} onAddBooking=${onAddBooking} onCancelBooking=${onDeleteBooking} slotCount=${slotCount} slotFull=${slotFull} onDone=${()=>setTab("book")}/>`}
+      ${tab==="book"  && html`<${BookingTab} apiUrl=${apiUrl} patients=${patients} bookings=${bookings} onAddBooking=${onAddBooking} onCancelBooking=${onDeleteBooking} slotCount=${slotCount} slotFull=${slotFull} onDone=${()=>setTab("book")} onRefreshBookings=${fetchBookings}/>`}
       ${tab==="list"  && (isAdmin?html`<${ListTab} bookings=${bookings} onDelete=${onDeleteBooking} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
       ${tab==="stats" && (isAdmin?html`<${StatsTab} patients=${patients} bookings=${bookings} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
       ${tab==="setup" && (isAdmin?html`<${SettingsScreen} onSave=${onSaveUrl}/>`:html`<${LockedScreen}/>`)}
@@ -905,7 +970,7 @@ function App(){
     <!-- BOTTOM NAV -->
     <nav style=${{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"white",borderTop:`1px solid ${C.border}`,boxShadow:"0 -4px 20px rgba(0,0,0,.08)",display:"flex",height:64,zIndex:100}}>
       ${TABS.map(t=>{const active=tab===t.id,locked=t.admin&&!isAdmin;
-        return html`<button key=${t.id} onClick=${()=>{if(t.admin&&!isAdmin){setShowLogin(true);}else setTab(t.id);}}
+        return html`<button key=${t.id} onClick=${()=>{if(t.admin&&!isAdmin){setShowLogin(true);}else handleTabSwitch(t.id);}}
           style=${{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"none",border:"none",cursor:"pointer",borderTop:`2.5px solid ${active?C.teal:"transparent"}`,position:"relative"}}>
           <${Ico} name=${t.icon} size=${22} color=${active?C.teal:locked?"#CBD5E1":C.textLt}/>
           <span style=${{fontSize:11,color:active?C.teal:locked?"#CBD5E1":C.textLt,fontWeight:active?700:400}}>${t.lbl}</span>
