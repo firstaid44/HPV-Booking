@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย 12.04</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V12.14</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -427,15 +427,18 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       </div>
       ${(()=>{
         const existBk=bookings.find(b=>(b.idcard||b["เลขบัตรประชาชน"]||"")===pt.idcard);
-        if(existBk) return html`<div style=${{background:"#EDE9FE",borderRadius:12,padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-start",marginBottom:0}}>
-          <span style=${{fontSize:18,flexShrink:0}}>🔔</span>
-          <div>
-            <div style=${{fontWeight:700,fontSize:13,color:"#7C3AED"}}>มีการจองคิวอยู่แล้ว</div>
-            <div style=${{fontSize:12,color:"#6D28D9",marginTop:3,lineHeight:1.6}}>
-              วันที่ ${existBk._dateLabel||existBk["วันที่นัด"]||""} เวลา ${existBk.time||existBk["เวลา"]||""} น.<br/>
-              กรุณายกเลิกการจองเดิมก่อน จึงจะสามารถจองคิวใหม่ได้
+        if(existBk) return html`<div>
+          <div style=${{background:"#EDE9FE",borderRadius:12,padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-start",marginBottom:10}}>
+            <span style=${{fontSize:18,flexShrink:0}}>🔔</span>
+            <div>
+              <div style=${{fontWeight:700,fontSize:13,color:"#7C3AED"}}>มีการจองคิวอยู่แล้ว</div>
+              <div style=${{fontSize:12,color:"#6D28D9",marginTop:3,lineHeight:1.6}}>
+                วันที่ ${existBk._dateLabel||existBk["วันที่นัด"]||""} เวลา ${existBk.time||existBk["เวลา"]||""} น.<br/>
+                กรุณายกเลิกการจองเดิมก่อน จึงจะสามารถจองคิวใหม่ได้
+              </div>
             </div>
           </div>
+          <button onClick=${reset} style=${{width:"100%",background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,fontWeight:600,color:C.textMd}}>← กลับไปหน้าค้นหา</button>
         </div>`;
         return html`<div style=${{display:"flex",gap:8}}>
           <button onClick=${reset} style=${{flex:1,background:"white",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 0",fontSize:14,color:C.textMd}}>กลับ</button>
