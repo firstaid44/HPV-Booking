@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.19.54</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.20.05</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -810,11 +810,68 @@ function App(){
   },[]);
 
   // ---- fetch bookings only (fast, realtime) ----
+  // ============================================================
+  // แปลง raw JS Date string → วันที่ไทย พ.ศ. / เวลา HH:MM
+  // รองรับ: "Thu Apr 27 2569 14:00:00 GMT+0700 (เวลาอินโดจีน) Sat Dec 30 1899..."
+  // ============================================================
+  const _TH_MON = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
+                   "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+  const _EN_MON = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,
+                   Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+
+  function cleanDateStr(s) {
+    if (!s) return "";
+    s = String(s).trim();
+    // ถ้ามีชื่อเดือนไทยอยู่แล้ว → คืนได้เลย (ตัด whitespace ซ้ำ)
+    if (_TH_MON.some(m => s.includes(m))) {
+      // อาจมีข้อมูลต่อท้าย (เช่น " 08:00 น." หรือ raw date) → ตัดให้เหลือแค่วันที่
+      for (const m of _TH_MON) {
+        if (!s.includes(m)) continue;
+        const re = new RegExp("(\\d{1,2})\\s+"+m+"\\s+(\\d{4})");
+        const hit = s.match(re);
+        if (hit) return hit[1]+" "+m+" "+hit[2];
+      }
+      return s.replace(/\s+/g," ").trim();
+    }
+    // raw JS Date string: "Thu Apr 27 2569 08:00:00 GMT+0700 ..."
+    // หา pattern: วัน(Eng) เดือน(Eng) วันที่ ปี
+    const mDate = s.match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})/i);
+    if (mDate) {
+      const mon = mDate[1].charAt(0).toUpperCase()+mDate[1].slice(1).toLowerCase();
+      const day = parseInt(mDate[2]);
+      const yr  = parseInt(mDate[3]); // Sheets ส่ง พ.ศ. มาตรงๆ (เช่น 2569)
+      const mi  = _EN_MON[mon];
+      if (mi !== undefined) return day+" "+_TH_MON[mi]+" "+yr;
+    }
+    return s;
+  }
+
+  function cleanTimeStr(s) {
+    if (!s) return "";
+    s = String(s).trim();
+    // HH:MM อยู่แล้ว
+    if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+    // raw Date string — จับ HH:MM จากส่วนที่ไม่ใช่ 1899
+    // "Thu Apr 27 2569 08:00:00 GMT+0700 ... Sat Dec 30 1899 22:42..."
+    // เอาแค่ส่วนแรก (ก่อน Sat/Sun Dec 30 1899)
+    const part = s.replace(/(?:Sat|Sun)\s+Dec\s+30\s+1899.*$/i,"").trim();
+    const mTime = part.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+    if (mTime) return mTime[1].padStart(2,"0")+":"+mTime[2];
+    // decimal fraction: 0.333... = 08:00
+    const num = parseFloat(s);
+    if (!isNaN(num) && num > 0 && num < 1) {
+      const tot = Math.round(num*1440);
+      return String(Math.floor(tot/60)).padStart(2,"0")+":"+String(tot%60).padStart(2,"0");
+    }
+    return s;
+  }
+
   function normaliseBooking(b){
-    // หา idcard จากทุกชื่อคอลัมน์ที่เป็นไปได้
     const idcard = String(b.idcard||b["เลขบัตรประชาชน"]||b["เลขบัตร"]||"").trim();
-    const dateLabel = String(b._dateLabel||b["วันที่นัด"]||b["วันที่จองคิว"]||b["วันนัด"]||"").trim();
-    const time      = String(b.time||b["เวลา"]||b["เวลาที่จองคิว"]||"").trim();
+    const rawDate = b._dateLabel||b["วันที่นัด"]||b["วันที่จองคิว"]||b["วันนัด"]||"";
+    const rawTime = b.time||b["เวลา"]||b["เวลาที่จองคิว"]||"";
+    const dateLabel = cleanDateStr(String(rawDate));
+    const time      = cleanTimeStr(String(rawTime));
     const name      = String(b.name||b["ชื่อ-นามสกุล"]||b["ชื่อ-สกุล"]||"").trim();
     const id        = String(b.id||b["id"]||b["เลขการจอง"]||b["รหัส"]||"").trim();
     return {...b,
