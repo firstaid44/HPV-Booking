@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.21</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.33</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -37,7 +37,7 @@ const MAX_SLOT    = 1;
 const SYNC_MS     = 15000;
 const TIME_SLOTS  = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
                      "13:00","13:30","14:00","14:30","15:00","15:30"];
-const MOO_NAME    = {"01":"หมู่ 1 ","02":"หมู่ 2","03":"หมู่ 3",
+const MOO_NAME    = {"01":"หมู่ 1 บ้านสะบ้าย้อย","02":"หมู่ 2","03":"หมู่ 3",
                      "04":"หมู่ 4","05":"หมู่ 5","06":"หมู่ 6",
                      "07":"หมู่ 7","08":"หมู่ 8","09":"หมู่ 9"};
 const HOLIDAYS    = new Set(["2026-01-01","2026-04-06","2026-04-13","2026-04-14","2026-04-15",
@@ -311,6 +311,9 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
   const [showConfirm,setShowConfirm]=useState(false);
   const [searched,setSearched]=useState(false);
   const [searching,setSearching]=useState(false);
+  const [cancelBkId,setCancelBkId]=useState(null);   // id ที่กำลังจะยกเลิก (จากหน้าค้นหา)
+  const [cancelName,setCancelName]=useState("");
+  const [cancelDoing,setCancelDoing]=useState(false);
 
   async function doSearch(){
     if(!sid.trim()&&!snm.trim())return;
@@ -339,7 +342,21 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       onAddBooking({...bk,synced:true,targetOk},true);
     }catch(e){setSyncSt("err");}
   }
-  function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);setShowConfirm(false);setSearched(false);setSearching(false);}
+  function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);setShowConfirm(false);setSearched(false);setSearching(false);setCancelBkId(null);setCancelName("");}
+
+  async function doCancel(id){
+    setCancelDoing(true);
+    try{
+      if(onCancelBooking) await onCancelBooking(id);
+      // refresh search results after cancel
+      if(onRefreshBookings) await onRefreshBookings(true);
+      let r=patients;
+      if(sid.trim()) r=r.filter(p=>String(p.idcard||"").includes(sid.trim()));
+      if(snm.trim()){const q=snm.trim().toLowerCase();r=r.filter(p=>(p.fname||"").toLowerCase().includes(q)||(p.lname||"").toLowerCase().includes(q));}
+      setRes(r.slice(0,20));
+    }catch(e){alert("เกิดข้อผิดพลาด: "+e.message);}
+    setCancelDoing(false);setCancelBkId(null);setCancelName("");
+  }
   function resetAndGoHome(){reset();if(onDone)onDone();}
   const sc=t=>slotCount(selD?dKey(selD):"",t);
   const sf=t=>slotFull(selD?dKey(selD):"",t,MAX_SLOT);
@@ -355,6 +372,24 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
     })}
   </div>`;
   return html`<div class="fade">
+    ${cancelBkId&&html`<div style=${{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style=${{background:"white",borderRadius:20,padding:24,maxWidth:320,width:"100%",animation:"popIn .2s ease"}}>
+        <div style=${{fontWeight:700,fontSize:16,color:C.textDk,marginBottom:8}}>ยืนยันการยกเลิก?</div>
+        <div style=${{fontSize:13,color:C.textMd,marginBottom:6}}>
+          รายการนี้จะถูกยกเลิกทั้งในแอปและ Google Sheets<br/>
+          และล้างข้อมูลในคอลัมน์ P ของชีตเป้าหมาย
+        </div>
+        ${cancelName&&html`<div style=${{fontSize:13,fontWeight:700,color:C.textDk,background:C.bg,borderRadius:8,padding:"6px 10px",marginBottom:12}}>${cancelName}</div>`}
+        <div style=${{display:"flex",gap:8}}>
+          <button onClick=${()=>{setCancelBkId(null);setCancelName("");}} disabled=${cancelDoing}
+            style=${{flex:1,background:"#F1F5F9",border:"none",borderRadius:10,padding:"10px 0",fontSize:14,fontWeight:600,color:C.textMd}}>ยกเลิก</button>
+          <button onClick=${()=>doCancel(cancelBkId)} disabled=${cancelDoing}
+            style=${{flex:1,background:C.red,color:"white",border:"none",borderRadius:10,padding:"10px 0",fontSize:14,fontWeight:700}}>
+            ${cancelDoing?html`<span style=${{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><div style=${{width:14,height:14,border:"2px solid rgba(255,255,255,.4)",borderTopColor:"white",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>กำลังยกเลิก...</span>`:"ยืนยัน"}
+          </button>
+        </div>
+      </div>
+    </div>`}
     ${showConfirm&&html`<div style=${{position:"fixed",inset:0,zIndex:150,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style=${{background:"white",borderRadius:20,padding:"24px 20px",maxWidth:360,width:"100%",animation:"popIn .2s ease"}}>
         <div style=${{width:52,height:52,borderRadius:16,background:C.tealLt,margin:"0 auto 14px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>📋</div>
@@ -411,7 +446,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
                 const bkId=bkd.id||bkd["id"];
                 return html`<div style=${{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
                   <span style=${{fontSize:10,padding:"3px 8px",borderRadius:8,background:"#EDE9FE",color:"#7C3AED",fontWeight:700,textAlign:"right",lineHeight:1.4,whiteSpace:"nowrap"}}>จองคิวแล้ว<br/>${bkd._dateLabel||bkd["วันที่นัด"]||""} ${bkd.time||bkd["เวลา"]||""}</span>
-                  <button onClick=${ev=>{ev.stopPropagation();if(confirm("ยืนยันการยกเลิกการจองของ "+p.fname+" "+p.lname+"?")){onCancelBooking&&onCancelBooking(bkId);}}} style=${{fontSize:10,padding:"2px 8px",borderRadius:6,background:"#FEE2E2",color:"#DC2626",border:"none",fontWeight:700,cursor:"pointer"}}>ยกเลิก</button>
+                  <button onClick=${ev=>{ev.stopPropagation();setCancelBkId(bkId);setCancelName(p.titlename+" "+p.fname+" "+p.lname);}} style=${{fontSize:10,padding:"2px 8px",borderRadius:6,background:"#FEE2E2",color:"#DC2626",border:"none",fontWeight:700,cursor:"pointer"}}>ยกเลิก</button>
                 </div>`;
               }
               return html`<span style=${{fontSize:10,padding:"3px 8px",borderRadius:8,flexShrink:0,background:eb(e),color:ec(e),fontWeight:700}}>${e.ok?"มีสิทธิ์":e.col==="amber"?"ยังไม่ถึงกำหนด":"ไม่อยู่เกณฑ์"}</span>`;
@@ -826,6 +861,24 @@ function App(){
                    "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
   const _EN_MON = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,
                    Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  // แปลง "27 เมษายน 2569" → "2026-04-27" (ISO key ใช้เปรียบเทียบ slot)
+  function parseTHDateToISO(s) {
+    if (!s) return "";
+    for (let mi=0; mi<_TH_MON.length; mi++) {
+      const mth = _TH_MON[mi];
+      if (!s.includes(mth)) continue;
+      const re = new RegExp("(\d{1,2})\s+" + mth + "\s+(\d{4})");
+      const hit = s.match(re);
+      if (hit) {
+        const day    = parseInt(hit[1]);
+        const beYear = parseInt(hit[2]);
+        const ceYear = beYear >= 2500 ? beYear - 543 : beYear;
+        const d = new Date(ceYear, mi, day);
+        return dKey(d); // "YYYY-MM-DD"
+      }
+    }
+    return s;
+  }
 
   function cleanDateStr(s) {
     if (!s) return "";
@@ -901,7 +954,7 @@ function App(){
     return {...b,
       id, idcard, name,
       _dateLabel: dateLabel,
-      _dk: b._dk||dateLabel,
+      _dk: parseTHDateToISO(dateLabel)||b._dk||dateLabel,
       _dayTh: b._dayTh||"",
       time,
       village: String(b.village||b["หมู่บ้าน"]||b["หมู่ที่"]||"").trim(),
@@ -955,8 +1008,9 @@ function App(){
   function rebuildSlots(list){
     const m={};
     list.forEach(bk=>{
-      const dk=String(bk._dk||bk["วันที่นัด"]||bk["วันที่จองคิว"]||"").trim();
-      const t=String(bk.time||bk["เวลา"]||bk["เวลาที่จองคิว"]||"").trim();
+      // _dk ถูก normalise เป็น ISO "YYYY-MM-DD" แล้ว (ใน normaliseBooking)
+      const dk=String(bk._dk||"").trim();
+      const t=String(bk.time||bk["เวลา"]||"").trim();
       if(dk&&t) m[dk+"-"+t]=(m[dk+"-"+t]||0)+1;
     });
     setSlotMap(m);
@@ -972,10 +1026,17 @@ function App(){
     });
   }
   // Optimistic delete: remove locally, Sheets updated by API call
-  function onDeleteBooking(id){
+  async function onDeleteBooking(id){
+    const url=localStorage.getItem(KEY_URL)||DEFAULT_URL;
+    // อัปเดต UI ทันที (optimistic)
     setBookings(prev=>{const u=prev.filter(b=>String(b.id)!==String(id)&&String(b["id"])!==String(id));rebuildSlots(u);return u;});
-    // re-fetch after short delay to confirm
-    setTimeout(()=>fetchBookings(true),2000);
+    // เรียก API ลบจาก Google Sheets + ล้างคอลัมน์ P
+    if(url){
+      try{ await apiPost(url,{action:"deleteBooking",id}); }
+      catch(e){ console.warn("deleteBooking API error:",e.message); }
+    }
+    // re-fetch ยืนยันผล
+    setTimeout(()=>fetchBookings(true),1500);
   }
   function doLogin(pin){if(pin===ADMIN_PIN){localStorage.setItem(KEY_ADM,JSON.stringify({expiry:Date.now()+SESSION_H*3600*1000}));setIsAdmin(true);setShowLogin(false);return true;}return false;}
   function doLogout(){localStorage.removeItem(KEY_ADM);setIsAdmin(false);}
