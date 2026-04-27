@@ -421,7 +421,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
         <div style=${{position:"absolute",top:-24,right:-24,width:96,height:96,borderRadius:"50%",background:"rgba(255,255,255,.1)"}}/>
         <div style=${{position:"absolute",bottom:-32,left:-16,width:110,height:110,borderRadius:"50%",background:"rgba(255,255,255,.07)"}}/>
         <div style=${{width:60,height:60,borderRadius:18,background:"rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",fontSize:28,position:"relative"}}>🪪</div>
-        <div style=${{color:"white",fontWeight:700,fontSize:19,marginBottom:4}}>ตรวจสอบสิทธิ์นัดหมาย</div>
+        <div style=${{color:"white",fontWeight:700,fontSize:19,marginBottom:4}}>ตรวจสอบสิทธิ์และนัดหมาย</div>
         <div style=${{color:"rgba(255,255,255,.8)",fontSize:13}}>HPV Self-test คัดกรองมะเร็งปากมดลูก</div>
       </div>
 
@@ -472,7 +472,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       </div>`}
       ${searching&&html`<div style=${{marginTop:0,textAlign:"center",padding:"24px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
         <div style=${{width:32,height:32,border:`3px solid ${C.tealLt}`,borderTopColor:C.teal,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-        <div style=${{fontSize:13,color:C.textMd}}>กำลังดึงข้อมูลจาก Google Sheets...</div>
+        <div style=${{fontSize:13,color:C.textMd}}>กำลังโหลดข้อมูลจากระบบ...</div>
       </div>`}
       ${!searching&&searched&&res.length===0&&html`<div style=${{marginTop:0,textAlign:"center",padding:"20px 0",color:C.textLt,fontSize:13,background:"white",borderRadius:14,boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
         <div style=${{fontSize:28,marginBottom:6}}>🔍</div>
@@ -491,7 +491,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
         </div>
         <div style=${{display:"flex",flexDirection:"column",gap:9}}>
           ${[
-            {icon:"📞",label:"โทรติดต่อ",val:"074-399-xxx"},
+            {icon:"📞",label:"โทรติดต่อ",val:"098-0010818"},
             {icon:"🕐",label:"เวลาให้บริการ",val:"จ. และ ศ. เวลา 08.00–15.30 น."},
             {icon:"📅",label:"เงื่อนไข",val:"อายุ 30–60 ปี ตรวจทุก 5 ปี"},
             {icon:"📌",label:"นำมาด้วย",val:"บัตรประชาชน / สมุดประจำตัวผู้ป่วย"},
@@ -1129,7 +1129,7 @@ function App(){
           <${Ico} name="shield" size=${20} color="white"/>
         </div>
         <div style=${{flex:1}}>
-          <div style=${{color:"white",fontWeight:700,fontSize:15}}>HPV Self-test จองคิว</div>
+          <div style=${{color:"white",fontWeight:700,fontSize:15}}>จองคิว HPV Self-test</div>
           <div style=${{color:"rgba(255,255,255,.75)",fontSize:11}}>${CENTER_NAME}</div>
         </div>
         ${isAdmin
