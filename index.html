@@ -459,7 +459,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       </div>`}
       ${searching&&html`<div style=${{marginTop:16,textAlign:"center",padding:"24px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
         <div style=${{width:32,height:32,border:`3px solid ${C.tealLt}`,borderTopColor:C.teal,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-        <div style=${{fontSize:13,color:C.textMd}}>กำลังดึงข้อมูลจาก Google Sheets...</div>
+        <div style=${{fontSize:13,color:C.textMd}}>กำลังตรวจสอบข้อมูลจากระบบ...</div>
       </div>`}
       ${!searching&&searched&&res.length===0&&html`<div style=${{marginTop:16,textAlign:"center",padding:"20px 0",color:C.textLt,fontSize:13}}>ไม่พบข้อมูลในระบบ</div>`}
     </div>`}
