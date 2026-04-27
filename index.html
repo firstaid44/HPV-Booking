@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.33</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.43</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -918,8 +918,11 @@ function App(){
   function cleanTimeStr(s) {
     if (!s) return "";
     s = String(s).trim();
-    // HH:MM อยู่แล้ว
-    if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+    // HH:MM หรือ H:MM อยู่แล้ว → normalise ให้เป็น 2-digit เสมอ (08:00 ไม่ใช่ 8:00)
+    if (/^\d{1,2}:\d{2}$/.test(s)) {
+      const p=s.split(":");
+      return p[0].padStart(2,"0")+":"+p[1];
+    }
 
     // raw JS Date string — ตัด epoch 1899 ออก แล้วหา HH:MM จากวันที่จริง
     // "Thu Apr 27 2569 08:00:00 GMT+0700 (เวลาอินโดจีน) Sat Dec 30 1899 22:42:00 GMT+0700"
@@ -948,7 +951,10 @@ function App(){
     const rawDate = b._dateLabel||b["วันที่นัด"]||b["วันที่จองคิว"]||b["วันนัด"]||"";
     const rawTime = b.time||b["เวลา"]||b["เวลาที่จองคิว"]||"";
     const dateLabel = cleanDateStr(String(rawDate));
-    const time      = cleanTimeStr(String(rawTime));
+    const timeRaw   = cleanTimeStr(String(rawTime));
+    // เพิ่มความปลอดภัย: normalise 2-digit เสมอ
+    const timeParts = timeRaw.split(":");
+    const time = timeParts.length===2 ? timeParts[0].padStart(2,"0")+":"+timeParts[1] : timeRaw;
     const name      = String(b.name||b["ชื่อ-นามสกุล"]||b["ชื่อ-สกุล"]||"").trim();
     const id        = String(b.id||b["id"]||b["เลขการจอง"]||b["รหัส"]||"").trim();
     return {...b,
@@ -1005,12 +1011,18 @@ function App(){
     return()=>clearInterval(t);
   },[apiUrl]);
 
+  function normaliseTimeKey(t){
+    // "8:00" → "08:00", "08:00" → "08:00"
+    const p=String(t||"").trim().split(":");
+    if(p.length===2) return p[0].padStart(2,"0")+":"+p[1];
+    return String(t||"").trim();
+  }
   function rebuildSlots(list){
     const m={};
     list.forEach(bk=>{
       // _dk ถูก normalise เป็น ISO "YYYY-MM-DD" แล้ว (ใน normaliseBooking)
       const dk=String(bk._dk||"").trim();
-      const t=String(bk.time||bk["เวลา"]||"").trim();
+      const t=normaliseTimeKey(bk.time||bk["เวลา"]||"");
       if(dk&&t) m[dk+"-"+t]=(m[dk+"-"+t]||0)+1;
     });
     setSlotMap(m);
