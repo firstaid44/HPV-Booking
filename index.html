@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.43</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.49</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -107,6 +107,8 @@ const {useState,useEffect,useMemo,useCallback,useRef} = React;
 
 const THM_S = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 const THM_F = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+// แปลง JS Date → Thai date string พ.ศ. (ใช้เป็น slot key — ต้องตรงกับ Sheets)
+const fmtSlotKey = d => d.getDate()+" "+THM_F[d.getMonth()]+" "+(d.getFullYear()+543);
 const DAY_TH = ["อาทิตย์","จันทร์","อังคาร","พุธ","พฤหัสบดี","ศุกร์","เสาร์"];
 const NOW    = new Date(2026,3,24);
 
@@ -333,7 +335,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       name:`${pt.titlename||""} ${pt.fname} ${pt.lname}`.trim(),
       idcard:pt.idcard,village:MOO_NAME[String(pt.moo||"").padStart(2,"0")]||pt.moo,
       hno:pt.hno,age:pt.age,date:fmtBEFull(selD),time:selT,note,
-      _dk:dKey(selD),_dateLabel:fmtBEFull(selD),_dayTh:DAY_TH[selD.getDay()],synced:false};
+      _dk:fmtBEFull(selD),_dateLabel:fmtBEFull(selD),_dayTh:DAY_TH[selD.getDay()],synced:false};
     onAddBooking(bk);setConf(bk);setStep(4);setSyncSt("ing");window.scrollTo(0,0);
     try{
       const r=await apiPost(apiUrl,bk);
@@ -358,8 +360,8 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
     setCancelDoing(false);setCancelBkId(null);setCancelName("");
   }
   function resetAndGoHome(){reset();if(onDone)onDone();}
-  const sc=t=>slotCount(selD?dKey(selD):"",t);
-  const sf=t=>slotFull(selD?dKey(selD):"",t,MAX_SLOT);
+  const sc=t=>slotCount(selD?fmtSlotKey(selD):"",t);
+  const sf=t=>slotFull(selD?fmtSlotKey(selD):"",t,MAX_SLOT);
   const StepBar=()=>html`<div style=${{display:"flex",alignItems:"center",marginBottom:16}}>
     ${["ค้นหา","เช็คสิทธิ์","เลือกวัน","ยืนยัน"].map((lbl,i)=>{const n=i+1,active=step===n,done=step>n;
       return html`<div key=${n} style=${{display:"flex",alignItems:"center",flex:i<3?1:"none"}}>
@@ -960,7 +962,7 @@ function App(){
     return {...b,
       id, idcard, name,
       _dateLabel: dateLabel,
-      _dk: parseTHDateToISO(dateLabel)||b._dk||dateLabel,
+      _dk: dateLabel||b._dk||"",  // ใช้ Thai string เป็น key ตรงๆ (ต้องตรงกับ fmtSlotKey)
       _dayTh: b._dayTh||"",
       time,
       village: String(b.village||b["หมู่บ้าน"]||b["หมู่ที่"]||"").trim(),
@@ -1011,8 +1013,7 @@ function App(){
     return()=>clearInterval(t);
   },[apiUrl]);
 
-  function normaliseTimeKey(t){
-    // "8:00" → "08:00", "08:00" → "08:00"
+  function normT(t){
     const p=String(t||"").trim().split(":");
     if(p.length===2) return p[0].padStart(2,"0")+":"+p[1];
     return String(t||"").trim();
@@ -1020,14 +1021,14 @@ function App(){
   function rebuildSlots(list){
     const m={};
     list.forEach(bk=>{
-      // _dk ถูก normalise เป็น ISO "YYYY-MM-DD" แล้ว (ใน normaliseBooking)
+      // _dk = Thai date string "27 เมษายน 2569" (same format as fmtSlotKey)
       const dk=String(bk._dk||"").trim();
-      const t=normaliseTimeKey(bk.time||bk["เวลา"]||"");
-      if(dk&&t) m[dk+"-"+t]=(m[dk+"-"+t]||0)+1;
+      const t=normT(bk.time||bk["เวลา"]||"");
+      if(dk&&t) m[dk+"__"+t]=(m[dk+"__"+t]||0)+1;
     });
     setSlotMap(m);
   }
-  function slotCount(dk,t){return slotMap[dk+"-"+t]||0;}
+  function slotCount(dk,t){return slotMap[dk+"__"+normT(t)]||0;}
   function slotFull(dk,t,max){return slotCount(dk,t)>=max;}
 
   // Optimistic add: show immediately, then Sheets becomes source of truth on next sync
