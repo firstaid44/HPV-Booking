@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.49</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.2569.04.27.09.56</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1052,7 +1052,7 @@ function App(){
     setTimeout(()=>fetchBookings(true),1500);
   }
   function doLogin(pin){if(pin===ADMIN_PIN){localStorage.setItem(KEY_ADM,JSON.stringify({expiry:Date.now()+SESSION_H*3600*1000}));setIsAdmin(true);setShowLogin(false);return true;}return false;}
-  function doLogout(){localStorage.removeItem(KEY_ADM);setIsAdmin(false);}
+  function doLogout(){localStorage.removeItem(KEY_ADM);setIsAdmin(false);setTab("book");}
   function onSaveUrl(u){setApiUrl(u);}
 
   const screened=useMemo(()=>patients.filter(p=>(p["วันคัดกรอง"]||"").trim()).length,[patients]);
@@ -1088,12 +1088,12 @@ function App(){
           <div style=${{color:"rgba(255,255,255,.75)",fontSize:11}}>${CENTER_NAME}</div>
         </div>
         ${isAdmin
-          ?html`<div style=${{display:"flex",alignItems:"center",gap:6}}>
-            <span style=${{background:"rgba(255,255,255,.2)",borderRadius:8,padding:"3px 8px",fontSize:11,color:"white",fontWeight:600}}>แอดมิน</span>
-            <button onClick=${doLogout} style=${{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,padding:"5px 8px",display:"flex",cursor:"pointer"}}><${Ico} name="logout" size=${16} color="white"/></button>
+          ?html`<div style=${{display:"flex",alignItems:"center",gap:8}}>
+            <span style=${{background:"rgba(255,255,255,.25)",borderRadius:10,padding:"6px 12px",fontSize:13,color:"white",fontWeight:700,border:"1.5px solid rgba(255,255,255,.4)"}}>🛡️ แอดมิน</span>
+            <button onClick=${doLogout} title="ออกจากระบบ" style=${{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,padding:"7px 10px",display:"flex",cursor:"pointer"}}><${Ico} name="logout" size=${18} color="white"/></button>
           </div>`
-          :html`<button onClick=${()=>setShowLogin(true)} style=${{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,padding:"6px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",color:"white",fontSize:12,fontWeight:600}}>
-            <${Ico} name="lock" size=${14} color="white"/> แอดมิน
+          :html`<button onClick=${()=>setShowLogin(true)} style=${{background:"rgba(255,255,255,.22)",border:"1.5px solid rgba(255,255,255,.5)",borderRadius:12,padding:"9px 16px",display:"flex",alignItems:"center",gap:7,cursor:"pointer",color:"white",fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}}>
+            <${Ico} name="lock" size=${17} color="white"/> 🔐 แอดมิน
           </button>`
         }
       </div>
@@ -1115,24 +1115,23 @@ function App(){
     </div>
 
     <!-- CONTENT -->
-    <div style=${{padding:"14px 14px 80px"}}>
+    <div style=${{padding:"14px 14px "+(isAdmin?"80px":"20px")}}>
       ${tab==="book"  && html`<${BookingTab} apiUrl=${apiUrl} patients=${patients} bookings=${bookings} onAddBooking=${onAddBooking} onCancelBooking=${onDeleteBooking} slotCount=${slotCount} slotFull=${slotFull} onDone=${()=>setTab("book")} onRefreshBookings=${fetchBookings}/>`}
       ${tab==="list"  && (isAdmin?html`<${ListTab} bookings=${bookings} onDelete=${onDeleteBooking} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
       ${tab==="stats" && (isAdmin?html`<${StatsTab} patients=${patients} bookings=${bookings} onRefresh=${()=>fetchAll(true)} lastSync=${lastSync}/>`:html`<${LockedScreen}/>`)}
       ${tab==="setup" && (isAdmin?html`<${SettingsScreen} onSave=${onSaveUrl}/>`:html`<${LockedScreen}/>`)}
     </div>
 
-    <!-- BOTTOM NAV -->
-    <nav style=${{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"white",borderTop:`1px solid ${C.border}`,boxShadow:"0 -4px 20px rgba(0,0,0,.08)",display:"flex",height:64,zIndex:100}}>
-      ${TABS.map(t=>{const active=tab===t.id,locked=t.admin&&!isAdmin;
-        return html`<button key=${t.id} onClick=${()=>{if(t.admin&&!isAdmin){setShowLogin(true);}else handleTabSwitch(t.id);}}
-          style=${{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"none",border:"none",cursor:"pointer",borderTop:`2.5px solid ${active?C.teal:"transparent"}`,position:"relative"}}>
-          <${Ico} name=${t.icon} size=${22} color=${active?C.teal:locked?"#CBD5E1":C.textLt}/>
-          <span style=${{fontSize:11,color:active?C.teal:locked?"#CBD5E1":C.textLt,fontWeight:active?700:400}}>${t.lbl}</span>
-          ${locked&&html`<div style=${{position:"absolute",top:8,right:"50%",transform:"translateX(8px)",width:14,height:14,background:"#E2E8F0",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center"}}><${Ico} name="lock" size=${8} color=${C.textLt}/></div>`}
+    <!-- BOTTOM NAV — admin only -->
+    ${isAdmin&&html`<nav style=${{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"white",borderTop:`1px solid ${C.border}`,boxShadow:"0 -4px 20px rgba(0,0,0,.08)",display:"flex",height:64,zIndex:100}}>
+      ${TABS.map(t=>{const active=tab===t.id;
+        return html`<button key=${t.id} onClick=${()=>handleTabSwitch(t.id)}
+          style=${{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,background:"none",border:"none",cursor:"pointer",borderTop:`2.5px solid ${active?C.teal:"transparent"}`}}>
+          <${Ico} name=${t.icon} size=${22} color=${active?C.teal:C.textLt}/>
+          <span style=${{fontSize:11,color:active?C.teal:C.textLt,fontWeight:active?700:400}}>${t.lbl}</span>
         </button>`;
       })}
-    </nav>
+    </nav>`}
 
     ${showLogin&&html`<${AdminLogin} onLogin=${doLogin} onClose=${()=>setShowLogin(false)}/>`}
   </div>`;
