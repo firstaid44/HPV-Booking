@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.20.05</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย V.9.21</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -37,7 +37,7 @@ const MAX_SLOT    = 1;
 const SYNC_MS     = 15000;
 const TIME_SLOTS  = ["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30",
                      "13:00","13:30","14:00","14:30","15:00","15:30"];
-const MOO_NAME    = {"01":"หมู่ 1 บ้านสะบ้าย้อย","02":"หมู่ 2","03":"หมู่ 3",
+const MOO_NAME    = {"01":"หมู่ 1 ","02":"หมู่ 2","03":"หมู่ 3",
                      "04":"หมู่ 4","05":"หมู่ 5","06":"หมู่ 6",
                      "07":"หมู่ 7","08":"หมู่ 8","09":"หมู่ 9"};
 const HOLIDAYS    = new Set(["2026-01-01","2026-04-06","2026-04-13","2026-04-14","2026-04-15",
@@ -309,15 +309,19 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
   const [selD,setSelD]=useState(null); const [selT,setSelT]=useState(""); const [note,setNote]=useState("");
   const [conf,setConf]=useState(null); const [syncSt,setSyncSt]=useState(null);
   const [showConfirm,setShowConfirm]=useState(false);
+  const [searched,setSearched]=useState(false);
+  const [searching,setSearching]=useState(false);
 
   async function doSearch(){
     if(!sid.trim()&&!snm.trim())return;
+    setSearching(true);setSearched(false);setRes([]);
     // fetch latest bookings from Sheets before showing results
     if(onRefreshBookings) await onRefreshBookings(true);
     let r=patients;
     if(sid.trim()) r=r.filter(p=>String(p.idcard||"").includes(sid.trim()));
     if(snm.trim()){const q=snm.trim().toLowerCase();r=r.filter(p=>(p.fname||"").toLowerCase().includes(q)||(p.lname||"").toLowerCase().includes(q));}
     setRes(r.slice(0,20));
+    setSearching(false);setSearched(true);
   }
   function selPt(p){setPt(p);setEl(checkElig(p));setStep(2);setRes([]);window.scrollTo(0,0);}
   async function confirmBook(){
@@ -335,7 +339,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       onAddBooking({...bk,synced:true,targetOk},true);
     }catch(e){setSyncSt("err");}
   }
-  function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);setShowConfirm(false);}
+  function reset(){setStep(1);setSid("");setSnm("");setRes([]);setPt(null);setEl(null);setSelD(null);setSelT("");setNote("");setConf(null);setSyncSt(null);setShowConfirm(false);setSearched(false);setSearching(false);}
   function resetAndGoHome(){reset();if(onDone)onDone();}
   const sc=t=>slotCount(selD?dKey(selD):"",t);
   const sf=t=>slotFull(selD?dKey(selD):"",t,MAX_SLOT);
@@ -416,7 +420,11 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
           })}
         </div>
       </div>`}
-      ${res.length===0&&(sid||snm)&&html`<div style=${{marginTop:16,textAlign:"center",padding:"20px 0",color:C.textLt,fontSize:13}}>ไม่พบข้อมูลในระบบ</div>`}
+      ${searching&&html`<div style=${{marginTop:16,textAlign:"center",padding:"24px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+        <div style=${{width:32,height:32,border:`3px solid ${C.tealLt}`,borderTopColor:C.teal,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+        <div style=${{fontSize:13,color:C.textMd}}>กำลังดึงข้อมูลจาก Google Sheets...</div>
+      </div>`}
+      ${!searching&&searched&&res.length===0&&html`<div style=${{marginTop:16,textAlign:"center",padding:"20px 0",color:C.textLt,fontSize:13}}>ไม่พบข้อมูลในระบบ</div>`}
     </div>`}
 
     ${step===2&&pt&&el&&html`<div class="fade">
@@ -822,26 +830,34 @@ function App(){
   function cleanDateStr(s) {
     if (!s) return "";
     s = String(s).trim();
-    // ถ้ามีชื่อเดือนไทยอยู่แล้ว → คืนได้เลย (ตัด whitespace ซ้ำ)
+
+    // ถ้ามีชื่อเดือนไทยอยู่แล้ว → ดึงเฉพาะ วันที่-เดือน-ปี
     if (_TH_MON.some(m => s.includes(m))) {
-      // อาจมีข้อมูลต่อท้าย (เช่น " 08:00 น." หรือ raw date) → ตัดให้เหลือแค่วันที่
       for (const m of _TH_MON) {
         if (!s.includes(m)) continue;
-        const re = new RegExp("(\\d{1,2})\\s+"+m+"\\s+(\\d{4})");
+        const re = new RegExp("(\d{1,2})\s+"+m+"\s+(\d{4})");
         const hit = s.match(re);
-        if (hit) return hit[1]+" "+m+" "+hit[2];
+        if (hit) {
+          const yr = parseInt(hit[2]);
+          // ถ้าปีน้อยกว่า 2500 = ค.ศ. → บวก 543 เป็น พ.ศ.
+          const beYr = yr < 2500 ? yr + 543 : yr;
+          return hit[1]+" "+m+" "+beYr;
+        }
       }
       return s.replace(/\s+/g," ").trim();
     }
-    // raw JS Date string: "Thu Apr 27 2569 08:00:00 GMT+0700 ..."
-    // หา pattern: วัน(Eng) เดือน(Eng) วันที่ ปี
+
+    // raw JS Date string: "Thu Apr 27 YYYY HH:MM:SS GMT+0700..."
+    // YYYY อาจเป็น ค.ศ. (2026) หรือ พ.ศ. (2569) ขึ้นกับ locale ของ browser/Apps Script
     const mDate = s.match(/(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})/i);
     if (mDate) {
       const mon = mDate[1].charAt(0).toUpperCase()+mDate[1].slice(1).toLowerCase();
       const day = parseInt(mDate[2]);
-      const yr  = parseInt(mDate[3]); // Sheets ส่ง พ.ศ. มาตรงๆ (เช่น 2569)
-      const mi  = _EN_MON[mon];
-      if (mi !== undefined) return day+" "+_TH_MON[mi]+" "+yr;
+      const yr  = parseInt(mDate[3]);
+      // ค.ศ. (< 2500) → บวก 543 เป็น พ.ศ. | พ.ศ. (>= 2500) → ใช้ได้เลย
+      const beYr = yr < 2500 ? yr + 543 : yr;
+      const mi   = _EN_MON[mon];
+      if (mi !== undefined) return day+" "+_TH_MON[mi]+" "+beYr;
     }
     return s;
   }
@@ -851,15 +867,23 @@ function App(){
     s = String(s).trim();
     // HH:MM อยู่แล้ว
     if (/^\d{1,2}:\d{2}$/.test(s)) return s;
-    // raw Date string — จับ HH:MM จากส่วนที่ไม่ใช่ 1899
-    // "Thu Apr 27 2569 08:00:00 GMT+0700 ... Sat Dec 30 1899 22:42..."
-    // เอาแค่ส่วนแรก (ก่อน Sat/Sun Dec 30 1899)
-    const part = s.replace(/(?:Sat|Sun)\s+Dec\s+30\s+1899.*$/i,"").trim();
-    const mTime = part.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+
+    // raw JS Date string — ตัด epoch 1899 ออก แล้วหา HH:MM จากวันที่จริง
+    // "Thu Apr 27 2569 08:00:00 GMT+0700 (เวลาอินโดจีน) Sat Dec 30 1899 22:42:00 GMT+0700"
+    // → เอาส่วนก่อน "Sat Dec 30 1899" หรือ "Sun Dec 30 1899"
+    const stripped = s
+      .replace(/(?:Sat|Sun)\s+Dec\s+30\s+1899.*$/i,"")
+      .replace(/GMT[+-]\d{4}.*$/i,"")
+      .replace(/\(.*?\)/g,"")
+      .trim();
+
+    // หา HH:MM จาก part ที่เหลือ (เช่น "Thu Apr 27 2569 08:00:00")
+    const mTime = stripped.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
     if (mTime) return mTime[1].padStart(2,"0")+":"+mTime[2];
+
     // decimal fraction: 0.333... = 08:00
     const num = parseFloat(s);
-    if (!isNaN(num) && num > 0 && num < 1) {
+    if (!isNaN(num) && num >= 0 && num < 1) {
       const tot = Math.round(num*1440);
       return String(Math.floor(tot/60)).padStart(2,"0")+":"+String(tot%60).padStart(2,"0");
     }
