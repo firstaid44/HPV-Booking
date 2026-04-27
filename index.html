@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="theme-color" content="#0D9488"/>
-<title>HPV Self-test จองคิว · สะบ้าย้อย V.2569.04.27.15.48</title>
+<title>HPV Self-test จองคิว · สะบ้าย้อย</title>
 <link href="https://fonts.googleapis.com/css2?family=Niramit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -31,7 +31,7 @@ button{cursor:pointer}
 /* ============================================================
    CONFIG — ไม่ต้องแก้ที่นี่ ตั้งค่าในแอปได้เลย (แท็บแอดมิน → ตั้งค่า)
    ============================================================ */
-const ADMIN_PIN   = "24646";
+const ADMIN_PIN   = "1234";
 const CENTER_NAME = "ศูนย์สุขภาพชุมชนสะบ้าย้อย";
 const MAX_SLOT    = 1;
 const SYNC_MS     = 15000;
@@ -318,7 +318,7 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
   const [cancelDoing,setCancelDoing]=useState(false);
 
   async function doSearch(){
-    if(!sid.trim())return;
+    if(!/^\d{13}$/.test(sid.trim()))return;
     setSearching(true);setSearched(false);setRes([]);
     if(onRefreshBookings) await onRefreshBookings(true);
     const r=patients.filter(p=>String(p.idcard||"").includes(sid.trim()));
@@ -428,19 +428,47 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
       <!-- Search box -->
       <div style=${{background:"white",borderRadius:18,padding:"20px 18px",boxShadow:"0 2px 12px rgba(0,0,0,.06)",marginBottom:16}}>
         <label style=${{fontSize:13,color:C.textMd,fontWeight:600,display:"block",marginBottom:8}}>เลขบัตรประชาชน 13 หลัก</label>
-        <div style=${{position:"relative",marginBottom:12}}>
-          <span style=${{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16}}>🪪</span>
-          <input value=${sid} maxLength="13" onChange=${e=>setSid(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&doSearch()}
-            placeholder="x-xxxx-xxxxx-xx-x"
-            style=${{paddingLeft:40,letterSpacing:.8,fontSize:16,borderRadius:12,border:`1.5px solid ${sid?C.teal:C.border}`,
-              background:sid?"#F0FDFA":"white",fontFamily:"'Niramit',sans-serif"}}/>
-        </div>
+        ${(()=>{
+          const isValid = /^\d{13}$/.test(sid);
+          const hasInput = sid.length > 0;
+          const borderCol = !hasInput ? C.border : isValid ? C.teal : C.red;
+          const bgCol = !hasInput ? "white" : isValid ? "#F0FDFA" : "#FFF5F5";
+          const fmtSid = sid.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, "$1-$2-$3-$4-$5");
+          return html`<div style=${{position:"relative",marginBottom:8}}>
+            <span style=${{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16}}>🪪</span>
+            <input value=${sid} maxLength="13"
+              onChange=${e=>setSid(e.target.value.replace(/\D/g,"").slice(0,13))}
+              onKeyDown=${e=>e.key==="Enter"&&/^\d{13}$/.test(sid)&&doSearch()}
+              placeholder="กรอกเลข 13 หลัก"
+              style=${{paddingLeft:40,paddingRight:52,letterSpacing:1,fontSize:16,borderRadius:12,
+                border:`1.5px solid ${borderCol}`,background:bgCol,fontFamily:"'Niramit',sans-serif"}}/>
+            <div style=${{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
+              fontSize:11,fontWeight:700,color:isValid?C.teal:hasInput?C.red:C.textLt}}>
+              ${sid.length}/13
+            </div>
+          </div>
+          ${hasInput&&!isValid&&html`<div style=${{display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.red,marginBottom:8}}>
+            <span>⚠️</span>
+            <span>${sid.length<13?"ยังกรอกไม่ครบ 13 หลัก (กรอก "+sid.length+" หลัก)":"เลขบัตรประชาชนต้องเป็นตัวเลขเท่านั้น"}</span>
+          </div>`}
+          ${isValid&&html`<div style=${{display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.teal,marginBottom:8}}>
+            <span>✓</span>
+            <span style=${{letterSpacing:.5}}>${fmtSid}</span>
+          </div>`}`;
+        })()}
         ${patients.length===0&&html`<div style=${{fontSize:12,color:C.textLt,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
           <div style=${{width:10,height:10,border:`2px solid ${C.teal}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 1s linear infinite"}}/> กำลังโหลดข้อมูล...
         </div>`}
-        <button onClick=${doSearch} style=${{width:"100%",background:sid?`linear-gradient(135deg,${C.teal},${C.tealDk})`:"#E2E8F0",color:sid?"white":C.textLt,border:"none",borderRadius:12,padding:"13px 0",fontSize:15,fontWeight:700,boxShadow:sid?`0 4px 14px ${C.teal}44`:"none",transition:"all .2s"}}>
-          🔍 ค้นหาข้อมูล
-        </button>
+        ${(()=>{
+          const canSearch=/^\d{13}$/.test(sid);
+          return html`<button onClick=${()=>canSearch&&doSearch()} disabled=${!canSearch}
+            style=${{width:"100%",background:canSearch?`linear-gradient(135deg,${C.teal},${C.tealDk})`:"#E2E8F0",
+              color:canSearch?"white":C.textLt,border:"none",borderRadius:12,padding:"13px 0",fontSize:15,fontWeight:700,
+              boxShadow:canSearch?`0 4px 14px ${C.teal}44`:"none",transition:"all .2s",
+              cursor:canSearch?"pointer":"not-allowed",opacity:canSearch?1:.7}}>
+            🔍 ค้นหาข้อมูล
+          </button>`;
+        })()}
       </div>
       ${res.length>0&&html`<div style=${{marginTop:16}}>
         <div style=${{fontSize:12,color:C.textMd,marginBottom:8}}>พบ ${res.length} ราย${res.length===20?" (แสดง 20 รายแรก)":""}</div>
@@ -491,10 +519,10 @@ function BookingTab({apiUrl,patients,bookings,onAddBooking,onCancelBooking,slotC
         </div>
         <div style=${{display:"flex",flexDirection:"column",gap:9}}>
           ${[
-            {icon:"📞",label:"โทรติดต่อ",val:"098-0010818"},
+            {icon:"📞",label:"โทรติดต่อ",val:"098-001-0818"},
             {icon:"🕐",label:"เวลาให้บริการ",val:"จ. และ ศ. เวลา 08.00–15.30 น."},
             {icon:"📅",label:"เงื่อนไข",val:"อายุ 30–60 ปี ตรวจทุก 5 ปี"},
-            {icon:"📌",label:"นำมาด้วย",val:"บัตรประชาชน / สมุดประจำตัวผู้ป่วย"},
+            {icon:"📌",label:"นำมาด้วย",val:"บัตรประชาชนตัวจริง / สมุดประจำตัวผู้ป่วย"},
           ].map(r=>html`<div key=${r.label} style=${{display:"flex",gap:10,alignItems:"flex-start"}}>
             <span style=${{fontSize:16,flexShrink:0,marginTop:1}}>${r.icon}</span>
             <div>
